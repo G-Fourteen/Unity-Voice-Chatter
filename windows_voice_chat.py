@@ -274,6 +274,8 @@ class VoiceChatApp:
 
     def _build_message(self, text: str):
         """Parse special tags from the AI response."""
+        if not isinstance(text, str):
+            text = "" if text is None else str(text)
         # Extract Markdown-style image tags without altering the URL
         md_image_pattern = r"!\[[^\]]*\]\((https?://[^\s)]+)\)"
         images = re.findall(md_image_pattern, text)
@@ -504,6 +506,15 @@ class VoiceChatApp:
             response = self.client.send_message(
                 request_messages, self.selected_model.get()
             )
+            if inspect.isawaitable(response):
+                try:
+                    response = asyncio.run(response)
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    try:
+                        response = loop.run_until_complete(response)
+                    finally:
+                        loop.close()
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
             self.ignore_mic = False
