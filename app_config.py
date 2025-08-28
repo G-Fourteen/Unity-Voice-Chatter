@@ -22,6 +22,5 @@ class Config:
         except FileNotFoundError:
             logger.warning("system_instructions.txt not found; proceeding without system instructions")
             self.system_instructions = ""
-        self.default_model = "unity"
         self.api_url = "https://text.pollinations.ai/openai"
         self.models_url = "https://text.pollinations.ai/models"

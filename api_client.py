@@ -52,23 +52,23 @@ class APIClient:
         logger.error("API unreachable after retries")
         return "Error: Upstream API unreachable after retries"
 
-    def fetch_models(self) -> List[Dict[str, str]]:
+    def fetch_models(self) -> List[str]:
         headers = {"Authorization": f"Bearer {self.config.pollinations_token}"}
-        result = self._request_json("GET", self.config.models_url, headers=headers, timeout=15)
+        result = self._request_json(
+            "GET", self.config.models_url, headers=headers, timeout=15
+        )
         if isinstance(result, list):
-            if all(isinstance(m, str) for m in result):
-                return [{"name": m.strip()} for m in result]
-            if all(isinstance(m, dict) and "name" in m for m in result):
-                return [
-                    {"name": m["name"].strip(), "description": m.get("description", "")}
-                    for m in result
-                ]
-        return [{"name": "unity", "description": "Default unity model"}]
+            names: List[str] = []
+            for m in result:
+                if isinstance(m, str):
+                    names.append(m.strip())
+                elif isinstance(m, dict) and "name" in m:
+                    names.append(str(m["name"]).strip())
+            if names:
+                return names
+        return ["unity"]
 
-    def send_message(self, messages: list, model: str | None):
-        if not model or not isinstance(model, str) or model.strip() == "":
-            model = self.config.default_model
-        logger.info(f"Using model: {model}")
+    def send_message(self, messages: list, model: str):
         payload = {"messages": messages, "model": model}
         headers = {"Authorization": f"Bearer {self.config.pollinations_token}"}
         result = self._request_json(
