@@ -4,8 +4,9 @@ import re
 import tempfile
 import threading
 import tkinter as tk
-from tkinter import scrolledtext
 
+import ttkbootstrap as ttk
+from ttkbootstrap.scrolled import ScrolledText
 from gtts import gTTS
 from playsound import playsound
 import speech_recognition as sr
@@ -20,9 +21,9 @@ class VoiceChatApp:
     def __init__(self):
         self.config = Config()
         self.client = APIClient(self.config)
-        self.root = tk.Tk()
+        self.root = ttk.Window(themename="flatly")
         self.root.title("Unity Voice Chat")
-        self.root.configure(bg="#000000")
+        self.root.option_add("*Font", ("Segoe UI", 10))
 
         self.voice_enabled = tk.BooleanVar(value=True)
         self.selected_voice = tk.StringVar(value="en")
@@ -36,83 +37,70 @@ class VoiceChatApp:
         self._build_ui()
 
     def _build_ui(self):
-        top_frame = tk.Frame(self.root, bg="#000000")
-        top_frame.pack(fill=tk.X, padx=5, pady=5)
+        top_frame = ttk.Frame(self.root, padding=5)
+        top_frame.pack(fill=tk.X)
 
-        voice_check = tk.Checkbutton(
+        voice_check = ttk.Checkbutton(
             top_frame,
             text="Voice Output",
             variable=self.voice_enabled,
-            bg="#000000",
-            fg="#FF0000",
-            selectcolor="#000000",
-            activebackground="#000000",
-            activeforeground="#FF0000",
+            bootstyle="round-toggle"
         )
         voice_check.pack(side=tk.LEFT)
 
         voices = self._available_voices()
-        voice_menu = tk.OptionMenu(
-            top_frame, self.selected_voice, self.selected_voice.get(), *voices
-        )
-        voice_menu.configure(
-            bg="#330000",
-            fg="#FF0000",
-            activebackground="#660000",
-            activeforeground="#FF0000",
-            highlightthickness=0,
+        self.voice_map = {name: code for code, name in voices}
+        self.selected_voice.set(voices[0][0])
+        self.voice_display = tk.StringVar(value=voices[0][1])
+        voice_menu = ttk.Combobox(
+            top_frame,
+            textvariable=self.voice_display,
+            values=[name for _, name in voices],
+            state="readonly",
+            width=25,
         )
         voice_menu.pack(side=tk.LEFT, padx=5)
-        voice_menu["menu"].config(bg="#000000", fg="#FF0000")
+        voice_menu.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.selected_voice.set(self.voice_map[self.voice_display.get()]),
+        )
 
-        self.start_button = tk.Button(
+        self.start_button = ttk.Button(
             top_frame,
             text="Start Talking",
             command=self._toggle_listening,
-            bg="#330000",
-            fg="#FF0000",
-            activebackground="#660000",
-            activeforeground="#FF0000",
+            bootstyle="info-outline",
         )
         self.start_button.pack(side=tk.LEFT, padx=5)
 
-        self.text_area = scrolledtext.ScrolledText(
+        self.text_area = ScrolledText(
             self.root,
             wrap=tk.WORD,
             state=tk.DISABLED,
-            bg="#000000",
-            fg="#FF0000",
+            padding=5,
         )
         self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        bottom_frame = tk.Frame(self.root, bg="#000000")
-        bottom_frame.pack(fill=tk.X, padx=5, pady=5)
+        bottom_frame = ttk.Frame(self.root, padding=5)
+        bottom_frame.pack(fill=tk.X)
 
-        self.entry = tk.Entry(
-            bottom_frame,
-            bg="#000000",
-            fg="#FF0000",
-            insertbackground="#FF0000",
-        )
-        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.entry = ttk.Entry(bottom_frame)
+        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         self.entry.bind("<Return>", lambda event: self._send_text())
 
-        send_button = tk.Button(
+        send_button = ttk.Button(
             bottom_frame,
             text="Send",
             command=self._send_text,
-            bg="#330000",
-            fg="#FF0000",
-            activebackground="#660000",
-            activeforeground="#FF0000",
+            bootstyle="primary",
         )
-        send_button.pack(side=tk.LEFT, padx=5)
+        send_button.pack(side=tk.LEFT)
 
     def _available_voices(self):
         from gtts.lang import tts_langs
 
-        langs = tts_langs()
-        return sorted(langs.keys())
+        langs = tts_langs()  # {code: language name}
+        return sorted(langs.items(), key=lambda item: item[1])
 
     def _append_text(self, speaker: str, text: str):
         self.text_area.configure(state=tk.NORMAL)
@@ -142,9 +130,10 @@ class VoiceChatApp:
     def _listen_loop(self):
         r = sr.Recognizer()
         with sr.Microphone() as source:
+            r.adjust_for_ambient_noise(source, duration=0.5)
             while self.listening:
                 try:
-                    audio = r.listen(source, timeout=1, phrase_time_limit=5)
+                    audio = r.listen(source, timeout=1, phrase_time_limit=8)
                     text = r.recognize_google(audio, language=self.selected_voice.get())
                     self._append_text("You", text)
                     self.messages.append({"role": "user", "content": text})
@@ -152,7 +141,7 @@ class VoiceChatApp:
                 except sr.WaitTimeoutError:
                     continue
                 except sr.UnknownValueError:
-                    self._append_text("System", "Could not understand audio")
+                    self._append_text("System", "Couldn't understand audio")
                 except sr.RequestError as e:
                     self._append_text("System", f"Speech recognition error: {e}")
 
@@ -170,15 +159,21 @@ class VoiceChatApp:
     def _speak(self, text: str):
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
         for sentence in sentences:
-            tts = gTTS(sentence, lang=self.selected_voice.get())
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-                temp_name = fp.name
-            tts.save(temp_name)
-            playsound(temp_name)
+            temp_name = None
             try:
-                os.remove(temp_name)
-            except OSError:
-                pass
+                tts = gTTS(sentence, lang=self.selected_voice.get())
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+                    temp_name = fp.name
+                tts.save(temp_name)
+                playsound(temp_name)
+            except Exception as e:
+                self._append_text("System", f"Audio playback failed: {e}")
+            finally:
+                if temp_name:
+                    try:
+                        os.remove(temp_name)
+                    except OSError:
+                        pass
 
     def run(self):
         self.root.mainloop()
