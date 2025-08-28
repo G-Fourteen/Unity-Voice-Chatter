@@ -172,7 +172,7 @@ class VoiceChatApp:
         )
 
         bottom_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
-        bottom_frame.pack(fill=tk.X)
+        bottom_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
         self.entry = ttk.Entry(bottom_frame, style="Neon.TEntry")
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
@@ -195,9 +195,12 @@ class VoiceChatApp:
         clear_button.pack(side=tk.LEFT, padx=5)
 
     def _build_message(self, content):
-        """Return content as-is without filtering URLs or tags."""
+        """Parse message content and extract text and image URLs."""
+
+        text = ""
+        image_urls: list[str] = []
         if isinstance(content, list):
-            parts = []
+            parts: list[str] = []
             for item in content:
                 if isinstance(item, dict):
                     if item.get("type") == "text":
@@ -205,11 +208,17 @@ class VoiceChatApp:
                     elif item.get("type") == "image_url":
                         url = item.get("image_url", {}).get("url")
                         if url:
-                            parts.append(url)
+                            image_urls.append(url)
             text = "\n".join(parts)
         else:
             text = "" if content is None else str(content)
-        return text, [], [], []
+
+        # Extract [IMAGE](url) tags from the text
+        for url in re.findall(r"\[IMAGE\]\(([^)]+)\)", text):
+            image_urls.append(url)
+        text = re.sub(r"\[IMAGE\]\([^)]+\)", "", text).strip()
+
+        return text, image_urls, [], []
 
     def _append_code_block(self, language: str, code: str):
         container = ttk.Frame(self.chat_frame, style="Neon.TFrame")
@@ -264,16 +273,27 @@ class VoiceChatApp:
         self.canvas.update_idletasks()
         self.canvas.yview_moveto(1.0)
 
-    def _append_image(self, url: str):
+    def _append_image(self, url: str, speaker: str | None = "AI"):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 image_data = BytesIO(resp.read())
             img = Image.open(image_data)
             photo = ImageTk.PhotoImage(img)
-            label = tk.Label(self.chat_frame, image=photo, bg="black")
+            bubble = ttk.Frame(self.chat_frame, style="Neon.TFrame")
+            if speaker:
+                tag_label = tk.Label(
+                    bubble,
+                    text=speaker,
+                    font=("Segoe UI", 12, "bold"),
+                    bg="black",
+                    fg=self.neon,
+                )
+                tag_label.pack(anchor="w")
+            label = tk.Label(bubble, image=photo, bg="black")
             label.image = photo
-            label.pack(anchor="w", padx=10, pady=4)
+            label.pack(anchor="w")
+            bubble.pack(anchor="w", padx=10, pady=4)
             self._image_refs.append(photo)
             self.canvas.update_idletasks()
             self.canvas.yview_moveto(1.0)
@@ -317,20 +337,19 @@ class VoiceChatApp:
             fg=self.neon,
         )
         tag_label.pack(anchor="e" if role == "user" else "w")
-        bg = "#0b93f6" if role == "user" else "#333333"
         msg_label = tk.Label(
             bubble,
             text=text,
             wraplength=400,
             justify=tk.RIGHT if role == "user" else tk.LEFT,
-            bg=bg,
-            fg="white",
+            bg="black",
+            fg=self.neon,
             padx=10,
             pady=6,
             font=("Segoe UI", 10),
         )
         msg_label.pack(anchor="e" if role == "user" else "w")
-        bubble.pack(anchor="e" if role == "user" else "w", padx=10, pady=4)
+        bubble.pack(anchor="e" if role == "user" else "w", padx=10, pady=4, fill=tk.X)
         self.canvas.update_idletasks()
         self.canvas.yview_moveto(1.0)
 
@@ -423,7 +442,7 @@ class VoiceChatApp:
         for lang, code in code_blocks:
             self._append_code_block(lang or "", code)
         for url in image_urls:
-            self._append_image(url)
+            self._append_image(url, speaker=None if text else "AI")
         if not text or not self.voice_enabled.get():
             self.ignore_mic = False
 
