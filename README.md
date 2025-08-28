@@ -6,12 +6,10 @@ with optional text-to-speech and speech-to-text capabilities.
 
 ## Features
 - Modern Windows 11 style interface built with `ttkbootstrap`
-- Toggleable voice output with multiple English voices via `pyttsx3`
+- Toggleable voice output using Google Text-to-Speech
 - Speech recognition input using the default microphone
 - Sentence-by-sentence speech synthesis to avoid cut-off on long replies
-- Voice selection dropdown for installed English voices
-- Pitch and rate sliders for real-time voice adjustment
-- Clear chat button to reset the conversation
+- Dropdown with full language names for all Google TTS languages
 - Basic chat log and memory of the current session
 
 ## Getting Started
