@@ -56,6 +56,7 @@ class APIClient:
         result = await self._request_json(
             "GET", self.config.models_url, headers=headers, timeout=15
         )
+        await self.close()
         if isinstance(result, list):
             if all(isinstance(m, str) for m in result):
                 return [{"name": m.strip()} for m in result]
