@@ -103,10 +103,11 @@ class VoiceChatApp:
         return sorted(langs.items(), key=lambda item: item[1])
 
     def _append_text(self, speaker: str, text: str):
-        self.text_area.configure(state=tk.NORMAL)
-        self.text_area.insert(tk.END, f"{speaker}: {text}\n")
-        self.text_area.configure(state=tk.DISABLED)
-        self.text_area.see(tk.END)
+        text_widget = self.text_area.text
+        text_widget.configure(state=tk.NORMAL)
+        text_widget.insert(tk.END, f"{speaker}: {text}\n")
+        text_widget.configure(state=tk.DISABLED)
+        text_widget.see(tk.END)
 
     def _send_text(self):
         text = self.entry.get().strip()
