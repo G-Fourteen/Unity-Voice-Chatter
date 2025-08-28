@@ -8,6 +8,9 @@ from tkinter import filedialog
 from io import BytesIO
 import urllib.parse
 
+import asyncio
+import inspect
+
 import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.scrolled import ScrolledText
@@ -93,6 +96,8 @@ class VoiceChatApp:
         # Fetch available models
         try:
             self.models = self.client.fetch_models()
+            if inspect.isawaitable(self.models):
+                self.models = asyncio.run(self.models)
         except Exception:
             self.models = [{"name": self.config.default_model, "description": ""}]
         self.model_descriptions = {
