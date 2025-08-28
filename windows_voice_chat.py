@@ -115,16 +115,17 @@ class VoiceChatApp:
 
     def _build_ui(self):
         # Header with title
-        header = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
+        header = tk.Frame(self.root, bg="black", padx=5, pady=5)
         header.pack(fill=tk.X)
-        ttk.Label(
+        tk.Label(
             header,
             text="Unity Voice Chat",
-            style="Neon.TLabel",
+            fg=self.neon,
+            bg="black",
             font=("Segoe UI", 14, "bold"),
         ).pack(side=tk.LEFT, padx=5)
 
-        top_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
+        top_frame = tk.Frame(self.root, bg="black", padx=5, pady=5)
         top_frame.pack(fill=tk.X)
 
         voice_check = ttk.Checkbutton(
