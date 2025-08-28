@@ -30,21 +30,14 @@ class VoiceChatApp:
         self.root.option_add("*Font", ("Segoe UI", 10))
         self.root.configure(bg="black")
 
-        # Set application icon and load logo image
+        # Set application icon if available
         app_dir = os.path.dirname(os.path.abspath(__file__))
         ico_path = os.path.join(app_dir, "unity.ico")
-        png_path = os.path.join(app_dir, "unity.png")
         if os.path.exists(ico_path):
             try:
                 self.root.iconbitmap(ico_path)
             except Exception:
                 pass
-        self.logo: ImageTk.PhotoImage | None = None
-        if os.path.exists(png_path):
-            try:
-                self.logo = ImageTk.PhotoImage(Image.open(png_path))
-            except Exception:
-                self.logo = None
 
         self._style = ttk.Style()
         neon = "#39FF14"
@@ -75,11 +68,9 @@ class VoiceChatApp:
         self._build_ui()
 
     def _build_ui(self):
-        # Header with logo and title
+        # Header with title
         header = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         header.pack(fill=tk.X)
-        if self.logo:
-            ttk.Label(header, image=self.logo, style="Neon.TLabel").pack(side=tk.LEFT)
         ttk.Label(
             header,
             text="Unity Voice Chat",
@@ -176,12 +167,51 @@ class VoiceChatApp:
             self._append_text("System", f"Failed to load image: {e}")
 
     def _available_voices(self):
-        """Return available English voices using gTTS languages."""
+        """Return available Western voices using gTTS languages."""
         voices: list[tuple[str, str]] = []
         try:
             languages = tts_langs()
+            western_codes = {
+                "af",
+                "bs",
+                "ca",
+                "cs",
+                "cy",
+                "da",
+                "de",
+                "el",
+                "en",
+                "es",
+                "et",
+                "eu",
+                "fi",
+                "fr",
+                "fr-CA",
+                "gl",
+                "hr",
+                "hu",
+                "is",
+                "it",
+                "la",
+                "lt",
+                "lv",
+                "nl",
+                "no",
+                "pl",
+                "pt",
+                "pt-PT",
+                "ro",
+                "ru",
+                "sk",
+                "sq",
+                "sr",
+                "sv",
+                "tr",
+                "uk",
+                "bg",
+            }
             for code, name in languages.items():
-                if code.startswith("en"):
+                if code in western_codes:
                     voices.append((code, f"{name} ({code})"))
         except Exception:
             pass

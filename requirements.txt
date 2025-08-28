@@ -6,3 +6,4 @@ python-dotenv
 ttkbootstrap
 requests
 Pillow
+gtts
