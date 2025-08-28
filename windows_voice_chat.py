@@ -110,6 +110,7 @@ class VoiceChatApp:
         # Audio control
         self.stop_audio = False
         self._current_audio_alias: str | None = None
+        self.ignore_mic = False
 
         self._build_ui()
 
@@ -308,25 +309,18 @@ class VoiceChatApp:
         codes = re.findall(code_pattern, text, flags=re.DOTALL)
         text = re.sub(code_pattern, "", text, flags=re.DOTALL)
 
+        fence_pattern = r"```([\w#+-]*)\n(.*?)```"
+        fence_codes = re.findall(fence_pattern, text, flags=re.DOTALL)
+        text = re.sub(fence_pattern, "", text, flags=re.DOTALL)
+
+        codes.extend(fence_codes)
         return text.strip(), images, codes, [m.strip() for m in memories]
 
     def _append_code_block(self, language: str, code: str):
-        frame = ttk.Frame(self.text_area.text, style="Neon.TFrame")
-        code_widget = tk.Text(
-            frame,
-            height=max(1, code.count("\n") + 1),
-            width=60,
-            wrap=tk.NONE,
-            bg="black",
-            fg=self.neon,
-            insertbackground=self.neon,
-        )
-        code_widget.insert("1.0", code)
-        code_widget.configure(state=tk.DISABLED)
-        code_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        container = ttk.Frame(self.text_area.text, style="Neon.TFrame")
 
-        button_frame = ttk.Frame(frame, style="Neon.TFrame")
-        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        header = ttk.Frame(container, style="Neon.TFrame")
+        header.pack(fill=tk.X)
 
         def copy_code():
             self.root.clipboard_clear()
@@ -344,16 +338,36 @@ class VoiceChatApp:
                 except OSError:
                     pass
 
+        ttk.Button(header, text="Copy", command=copy_code, style="Neon.TButton").pack(
+            side=tk.RIGHT
+        )
         ttk.Button(
-            button_frame, text="Copy", command=copy_code, style="Neon.TButton"
-        ).pack(fill=tk.X)
-        ttk.Button(
-            button_frame, text="Download", command=download_code, style="Neon.TButton"
-        ).pack(fill=tk.X)
+            header, text="Download", command=download_code, style="Neon.TButton"
+        ).pack(side=tk.RIGHT)
+
+        text_frame = ttk.Frame(container, style="Neon.TFrame")
+        text_frame.pack(fill=tk.BOTH, expand=True)
+
+        yscroll = ttk.Scrollbar(text_frame, orient=tk.VERTICAL)
+        yscroll.pack(side=tk.RIGHT, fill=tk.Y)
+        code_widget = tk.Text(
+            text_frame,
+            height=max(1, code.count("\n") + 1),
+            width=60,
+            wrap=tk.NONE,
+            yscrollcommand=yscroll.set,
+            bg="black",
+            fg=self.neon,
+            insertbackground=self.neon,
+        )
+        yscroll.config(command=code_widget.yview)
+        code_widget.insert("1.0", code)
+        code_widget.configure(state=tk.DISABLED)
+        code_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         text_widget = self.text_area.text
         text_widget.configure(state=tk.NORMAL)
-        text_widget.window_create(tk.END, window=frame)
+        text_widget.window_create(tk.END, window=container)
         text_widget.insert(tk.END, "\n")
         text_widget.configure(state=tk.DISABLED)
         text_widget.see(tk.END)
@@ -415,9 +429,12 @@ class VoiceChatApp:
         text_widget.configure(state=tk.NORMAL)
         text_widget.delete("1.0", tk.END)
         text_widget.configure(state=tk.DISABLED)
+        self.stop_audio = True
+        self.ignore_mic = False
 
     def _mute_audio(self):
         self.stop_audio = True
+        self.ignore_mic = False
         if os.name == "nt" and self._current_audio_alias:
             import ctypes
 
@@ -437,6 +454,7 @@ class VoiceChatApp:
         self.entry.delete(0, tk.END)
         self._append_text("You", text)
         self.messages.append({"role": "user", "content": text})
+        self.ignore_mic = True
         threading.Thread(target=self._get_response, args=(list(self.messages),)).start()
 
     def _toggle_listening(self):
@@ -454,11 +472,15 @@ class VoiceChatApp:
         with sr.Microphone() as source:
             r.adjust_for_ambient_noise(source, duration=0.5)
             while self.listening:
+                if self.ignore_mic:
+                    time.sleep(0.1)
+                    continue
                 try:
                     audio = r.listen(source, timeout=1, phrase_time_limit=8)
                     text = r.recognize_google(audio, language=self._language_from_voice())
                     self._append_text("You", text)
                     self.messages.append({"role": "user", "content": text})
+                    self.ignore_mic = True
                     threading.Thread(target=self._get_response, args=(list(self.messages),)).start()
                 except sr.WaitTimeoutError:
                     continue
@@ -479,6 +501,7 @@ class VoiceChatApp:
             )
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
+            self.ignore_mic = False
             return
 
         cleaned, image_urls, code_blocks, memories = self._build_message(response)
@@ -490,10 +513,14 @@ class VoiceChatApp:
             self._append_text("AI", cleaned)
             if self.voice_enabled.get():
                 self._speak(cleaned)
+            else:
+                self.ignore_mic = False
         for lang, code in code_blocks:
             self._append_code_block(lang or "", code)
         for url in image_urls:
             self._append_image(url)
+        if not cleaned or not self.voice_enabled.get():
+            self.ignore_mic = False
 
     def _play_audio(self, path: str):
         if os.name == "nt":
@@ -519,6 +546,7 @@ class VoiceChatApp:
             playsound(path)
 
     def _speak(self, text: str):
+        self.ignore_mic = True
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
         self.stop_audio = False
         for sentence in sentences:
@@ -540,6 +568,7 @@ class VoiceChatApp:
                     except OSError:
                         pass
         self.stop_audio = False
+        self.ignore_mic = False
 
     def run(self):
         self.root.mainloop()
