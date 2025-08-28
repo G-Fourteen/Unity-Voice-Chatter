@@ -277,28 +277,6 @@ class VoiceChatApp:
         images = re.findall(md_image_pattern, text)
         text = re.sub(md_image_pattern, "", text)
 
-        # Handle Pollinations image URLs that may contain spaces in the prompt.
-        pollinations_urls: list[str] = []
-
-        def _pollinations_repl(match: re.Match) -> str:
-            prompt = urllib.parse.unquote(match.group(1).strip())
-            query = match.group(2) or ""
-            params = dict(urllib.parse.parse_qsl(query, keep_blank_values=True))
-            if "model" not in params or not params["model"].strip():
-                params["model"] = self.selected_model.get()
-            encoded = urllib.parse.quote(prompt)
-            new_query = urllib.parse.urlencode(params)
-            pollinations_urls.append(
-                f"https://image.pollinations.ai/prompt/{encoded}?{new_query}"
-            )
-            return ""
-
-        poll_pattern = (
-            r"https://image\.pollinations\.ai/prompt/([^?]+)(?:\?([^\s]+))?"
-        )
-        text = re.sub(poll_pattern, _pollinations_repl, text)
-        images += pollinations_urls
-
         # Also capture any remaining bare URLs
         url_pattern = r"(https?://[^\s]+)"
         images += re.findall(url_pattern, text)
