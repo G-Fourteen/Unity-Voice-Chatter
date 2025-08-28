@@ -198,7 +198,6 @@ class VoiceChatApp:
         url_pattern = r"(https?://[^\s]+)"
         images += re.findall(url_pattern, text)
         text = re.sub(url_pattern, "", text)
-        images = [self._ensure_turbo_model(u) for u in images]
 
         memory_pattern = r"\[memory\](.*?)\[/memory\]"
         memories = re.findall(memory_pattern, text, flags=re.DOTALL)
@@ -214,14 +213,6 @@ class VoiceChatApp:
 
         codes.extend(fence_codes)
         return text.strip(), images, codes, [m.strip() for m in memories]
-
-    def _ensure_turbo_model(self, url: str) -> str:
-        if "image.pollinations.ai" in url:
-            if "model=" in url:
-                return re.sub(r"model=[^&]*", "model=turbo", url)
-            sep = "&" if "?" in url else "?"
-            return f"{url}{sep}model=turbo"
-        return url
 
     def _append_code_block(self, language: str, code: str):
         container = ttk.Frame(self.text_area.text, style="Neon.TFrame")
