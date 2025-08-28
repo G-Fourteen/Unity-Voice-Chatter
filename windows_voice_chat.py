@@ -9,6 +9,7 @@ from io import BytesIO
 import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.scrolled import ScrolledText
+from gtts import gTTS
 from PIL import Image, ImageTk
 from playsound import playsound
 import speech_recognition as sr
