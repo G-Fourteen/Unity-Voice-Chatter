@@ -7,6 +7,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 from io import BytesIO
+import urllib.parse
 
 import requests
 import ttkbootstrap as ttk
@@ -179,6 +180,22 @@ class VoiceChatApp:
         md_image_pattern = r"!\[[^\]]*\]\((https?://[^\s)]+)\)"
         images = re.findall(md_image_pattern, text)
         text = re.sub(md_image_pattern, "", text)
+
+        # Handle Pollinations image URLs that may contain spaces in the prompt.
+        pollinations_urls: list[str] = []
+
+        def _pollinations_repl(match: re.Match) -> str:
+            prompt = match.group(1).strip()
+            query = match.group(2)
+            encoded = urllib.parse.quote(prompt)
+            pollinations_urls.append(
+                f"https://image.pollinations.ai/prompt/{encoded}?{query}"
+            )
+            return ""
+
+        poll_pattern = r"https://image\.pollinations\.ai/prompt/([^?]+)\?([^\s]+)"
+        text = re.sub(poll_pattern, _pollinations_repl, text)
+        images += pollinations_urls
 
         # Also capture any remaining bare URLs
         url_pattern = r"(https?://[^\s]+)"
