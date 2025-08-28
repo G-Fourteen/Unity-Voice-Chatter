@@ -103,10 +103,11 @@ class VoiceChatApp:
         return sorted(langs.items(), key=lambda item: item[1])
 
     def _append_text(self, speaker: str, text: str):
-        self.text_area.configure(state=tk.NORMAL)
-        self.text_area.insert(tk.END, f"{speaker}: {text}\n")
-        self.text_area.configure(state=tk.DISABLED)
-        self.text_area.see(tk.END)
+        text_widget = self.text_area.text
+        text_widget.configure(state=tk.NORMAL)
+        text_widget.insert(tk.END, f"{speaker}: {text}\n")
+        text_widget.configure(state=tk.DISABLED)
+        text_widget.see(tk.END)
 
     def _send_text(self):
         text = self.entry.get().strip()
@@ -156,6 +157,18 @@ class VoiceChatApp:
         if self.voice_enabled.get():
             self._speak(response)
 
+    def _play_audio(self, path: str):
+        if os.name == "nt":
+            import ctypes
+
+            alias = f"vc{threading.get_ident()}"
+            mci = ctypes.windll.winmm.mciSendStringW
+            mci(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
+            mci(f'play {alias} wait', None, 0, None)
+            mci(f'close {alias}', None, 0, None)
+        else:
+            playsound(path)
+
     def _speak(self, text: str):
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
         for sentence in sentences:
@@ -165,7 +178,7 @@ class VoiceChatApp:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                     temp_name = fp.name
                 tts.save(temp_name)
-                playsound(temp_name)
+                self._play_audio(temp_name)
             except Exception as e:
                 self._append_text("System", f"Audio playback failed: {e}")
             finally:
