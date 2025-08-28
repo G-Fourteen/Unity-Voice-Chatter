@@ -10,10 +10,10 @@ import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.scrolled import ScrolledText
 from gtts import gTTS
+from gtts.lang import tts_langs
 from PIL import Image, ImageTk
 from playsound import playsound
 import speech_recognition as sr
-from google.cloud import texttospeech
 
 from app_config import Config
 from api_client import APIClient
@@ -176,32 +176,21 @@ class VoiceChatApp:
             self._append_text("System", f"Failed to load image: {e}")
 
     def _available_voices(self):
-        """Fetch available English female voices from Google Cloud TTS."""
+        """Return available English voices using gTTS languages."""
         voices: list[tuple[str, str]] = []
         try:
-            client = texttospeech.TextToSpeechClient()
-            response = client.list_voices()
-            for voice in response.voices:
-                if voice.ssml_gender == texttospeech.SsmlVoiceGender.FEMALE and any(
-                    code.startswith("en-") for code in voice.language_codes
-                ):
-                    display = f"{voice.name} ({voice.language_codes[0]})"
-                    voices.append((voice.name, display))
+            languages = tts_langs()
+            for code, name in languages.items():
+                if code.startswith("en"):
+                    voices.append((code, f"{name} ({code})"))
         except Exception:
             pass
         if voices:
             return voices
-        # Fallback list of common English female voices if API call fails
-        return [
-            ("en-US-Wavenet-F", "en-US-Wavenet-F"),
-            ("en-US-Neural2-F", "en-US-Neural2-F"),
-            ("en-GB-Wavenet-F", "en-GB-Wavenet-F"),
-            ("en-AU-Wavenet-F", "en-AU-Wavenet-F"),
-        ]
+        return [("en", "English (en)")]
 
     def _language_from_voice(self) -> str:
-        name = self.selected_voice.get()
-        return "-".join(name.split("-")[:2])
+        return self.selected_voice.get()
 
     def _append_text(self, speaker: str, text: str):
         text_widget = self.text_area.text
@@ -277,28 +266,13 @@ class VoiceChatApp:
 
     def _speak(self, text: str):
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
-        try:
-            client = texttospeech.TextToSpeechClient()
-        except Exception as e:
-            self._append_text("System", f"Audio playback failed: {e}")
-            return
         for sentence in sentences:
             temp_name = None
             try:
-                synthesis_input = texttospeech.SynthesisInput(text=sentence)
-                language = self._language_from_voice()
-                voice_params = texttospeech.VoiceSelectionParams(
-                    language_code=language, name=self.selected_voice.get()
-                )
-                audio_config = texttospeech.AudioConfig(
-                    audio_encoding=texttospeech.AudioEncoding.MP3
-                )
-                response = client.synthesize_speech(
-                    input=synthesis_input, voice=voice_params, audio_config=audio_config
-                )
+                tts = gTTS(text=sentence, lang=self._language_from_voice())
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                     temp_name = fp.name
-                    fp.write(response.audio_content)
+                    tts.write_to_fp(fp)
                 self._play_audio(temp_name)
             except Exception as e:
                 self._append_text("System", f"Audio playback failed: {e}")
