@@ -157,6 +157,18 @@ class VoiceChatApp:
         if self.voice_enabled.get():
             self._speak(response)
 
+    def _play_audio(self, path: str):
+        if os.name == "nt":
+            import ctypes
+
+            alias = f"vc{threading.get_ident()}"
+            mci = ctypes.windll.winmm.mciSendStringW
+            mci(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
+            mci(f'play {alias} wait', None, 0, None)
+            mci(f'close {alias}', None, 0, None)
+        else:
+            playsound(path)
+
     def _speak(self, text: str):
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
         for sentence in sentences:
@@ -166,7 +178,7 @@ class VoiceChatApp:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                     temp_name = fp.name
                 tts.save(temp_name)
-                playsound(temp_name)
+                self._play_audio(temp_name)
             except Exception as e:
                 self._append_text("System", f"Audio playback failed: {e}")
             finally:
