@@ -3,6 +3,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog
 from io import BytesIO
@@ -67,6 +68,10 @@ class VoiceChatApp:
         self._image_refs: list[ImageTk.PhotoImage] = []
         self.memories: list[str] = []
 
+        # Audio control
+        self.stop_audio = False
+        self._current_audio_alias: str | None = None
+
         self._build_ui()
 
     def _build_ui(self):
@@ -117,6 +122,22 @@ class VoiceChatApp:
         )
         self.start_button.pack(side=tk.LEFT, padx=5)
 
+        self.mute_button = ttk.Button(
+            top_frame,
+            text="Mute",
+            command=self._mute_audio,
+            style="Neon.TButton",
+        )
+        self.mute_button.pack(side=tk.LEFT, padx=5)
+
+        exit_button = ttk.Button(
+            top_frame,
+            text="Exit",
+            command=self._exit_app,
+            style="Neon.TButton",
+        )
+        exit_button.pack(side=tk.LEFT, padx=5)
+
         self.text_area = ScrolledText(
             self.root,
             wrap=tk.WORD,
@@ -143,6 +164,14 @@ class VoiceChatApp:
             style="Neon.TButton",
         )
         send_button.pack(side=tk.LEFT)
+
+        clear_button = ttk.Button(
+            bottom_frame,
+            text="Clear Chat",
+            command=self._clear_chat,
+            style="Neon.TButton",
+        )
+        clear_button.pack(side=tk.LEFT, padx=5)
 
     def _build_message(self, text: str):
         """Parse special tags from the AI response."""
@@ -265,6 +294,27 @@ class VoiceChatApp:
         text_widget.configure(state=tk.DISABLED)
         text_widget.see(tk.END)
 
+    def _clear_chat(self):
+        self.messages = [{"role": "system", "content": self.config.system_instructions}]
+        text_widget = self.text_area.text
+        text_widget.configure(state=tk.NORMAL)
+        text_widget.delete("1.0", tk.END)
+        text_widget.configure(state=tk.DISABLED)
+
+    def _mute_audio(self):
+        self.stop_audio = True
+        if os.name == "nt" and self._current_audio_alias:
+            import ctypes
+
+            mci = ctypes.windll.winmm.mciSendStringW
+            mci(f"stop {self._current_audio_alias}", None, 0, None)
+            mci(f"close {self._current_audio_alias}", None, 0, None)
+            self._current_audio_alias = None
+
+    def _exit_app(self):
+        self.listening = False
+        self.root.destroy()
+
     def _send_text(self):
         text = self.entry.get().strip()
         if not text:
@@ -303,16 +353,21 @@ class VoiceChatApp:
                     self._append_text("System", f"Speech recognition error: {e}")
 
     def _get_response(self, messages):
+        request_messages = (
+            messages[:1]
+            + [{"role": "system", "content": m} for m in self.memories]
+            + messages[1:]
+        )
         try:
             response = asyncio.run(
-                self.client.send_message(messages, self.config.default_model)
+                self.client.send_message(request_messages, self.config.default_model)
             )
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
             return
 
         cleaned, image_urls, code_blocks, memories = self._build_message(response)
-        self.messages.append({"role": "assistant", "content": response})
+        self.messages.append({"role": "assistant", "content": cleaned})
         for mem in memories:
             self.memories.append(mem)
             self._append_text("System", f"Saved memory: {mem}")
@@ -329,17 +384,31 @@ class VoiceChatApp:
         if os.name == "nt":
             import ctypes
 
-            alias = f"vc{threading.get_ident()}"
+            alias = "vc_audio"
+            self._current_audio_alias = alias
             mci = ctypes.windll.winmm.mciSendStringW
             mci(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
-            mci(f'play {alias} wait', None, 0, None)
+            mci(f'play {alias}', None, 0, None)
+            while True:
+                if self.stop_audio:
+                    mci(f'stop {alias}', None, 0, None)
+                    break
+                status_buf = ctypes.create_unicode_buffer(32)
+                mci(f'status {alias} mode', status_buf, 32, None)
+                if status_buf.value == "stopped":
+                    break
+                time.sleep(0.1)
             mci(f'close {alias}', None, 0, None)
+            self._current_audio_alias = None
         else:
             playsound(path)
 
     def _speak(self, text: str):
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
+        self.stop_audio = False
         for sentence in sentences:
+            if self.stop_audio:
+                break
             temp_name = None
             try:
                 tts = gTTS(text=sentence, lang=self._language_from_voice())
@@ -355,6 +424,7 @@ class VoiceChatApp:
                         os.remove(temp_name)
                     except OSError:
                         pass
+        self.stop_audio = False
 
     def run(self):
         self.root.mainloop()
