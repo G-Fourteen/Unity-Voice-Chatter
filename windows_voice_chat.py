@@ -4,10 +4,13 @@ import re
 import tempfile
 import threading
 import tkinter as tk
+from io import BytesIO
 
+import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.scrolled import ScrolledText
 from gtts import gTTS
+from PIL import Image, ImageTk
 from playsound import playsound
 import speech_recognition as sr
 
@@ -33,6 +36,9 @@ class VoiceChatApp:
 
         self.listening = False
         self.listen_thread: threading.Thread | None = None
+
+        # Keep references to images inserted in the chat to avoid garbage collection
+        self._image_refs: list[ImageTk.PhotoImage] = []
 
         self._build_ui()
 
@@ -96,6 +102,30 @@ class VoiceChatApp:
         )
         send_button.pack(side=tk.LEFT)
 
+    def _process_pollinations(self, text: str):
+        """Remove pollinations image URLs from text and return list of URLs."""
+        pattern = r"https?://\S*pollinations\.ai\S*"
+        urls = re.findall(pattern, text)
+        cleaned = re.sub(pattern, "", text).strip()
+        return cleaned, urls
+
+    def _append_image(self, url: str):
+        try:
+            resp = requests.get(url, timeout=10)
+            resp.raise_for_status()
+            image_data = BytesIO(resp.content)
+            img = Image.open(image_data)
+            photo = ImageTk.PhotoImage(img)
+            text_widget = self.text_area.text
+            text_widget.configure(state=tk.NORMAL)
+            text_widget.image_create(tk.END, image=photo)
+            text_widget.insert(tk.END, "\n")
+            text_widget.configure(state=tk.DISABLED)
+            text_widget.see(tk.END)
+            self._image_refs.append(photo)
+        except Exception as e:
+            self._append_text("System", f"Failed to load image: {e}")
+
     def _available_voices(self):
         from gtts.lang import tts_langs
 
@@ -152,10 +182,15 @@ class VoiceChatApp:
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
             return
+
+        cleaned, image_urls = self._process_pollinations(response)
         self.messages.append({"role": "assistant", "content": response})
-        self._append_text("AI", response)
-        if self.voice_enabled.get():
-            self._speak(response)
+        if cleaned:
+            self._append_text("AI", cleaned)
+            if self.voice_enabled.get():
+                self._speak(cleaned)
+        for url in image_urls:
+            self._append_image(url)
 
     def _play_audio(self, path: str):
         if os.name == "nt":
