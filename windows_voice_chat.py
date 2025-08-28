@@ -398,7 +398,10 @@ class VoiceChatApp:
             return
 
         cleaned, image_urls, code_blocks, memories = self._build_message(response)
-        self.messages.append({"role": "assistant", "content": cleaned})
+        assistant_content = (
+            cleaned if cleaned else ("[Image]" if image_urls else "[No content]")
+        )
+        self.messages.append({"role": "assistant", "content": assistant_content})
         for mem in memories:
             self.messages.append({"role": "system", "content": mem})
             self._append_text("System", f"Saved memory: {mem}")
