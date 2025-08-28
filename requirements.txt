@@ -1,6 +1,5 @@
 aiohttp
 gTTS
-google-cloud-texttospeech
 playsound
 SpeechRecognition
 pyaudio
