@@ -4,12 +4,16 @@ import re
 import tempfile
 import threading
 import tkinter as tk
+import webbrowser
+from io import BytesIO
+from urllib.request import urlopen
 
 import ttkbootstrap as ttk
 from ttkbootstrap.scrolled import ScrolledText
 from gtts import gTTS
 from playsound import playsound
 import speech_recognition as sr
+from PIL import Image, ImageTk
 
 from app_config import Config
 from api_client import APIClient
@@ -33,6 +37,9 @@ class VoiceChatApp:
 
         self.listening = False
         self.listen_thread: threading.Thread | None = None
+        self.pollinations_pattern = re.compile(r"https?://(?:\w+\.)?pollinations\.ai\S*", re.IGNORECASE)
+        self.images: list[ImageTk.PhotoImage] = []
+        self.url_counter = 0
 
         self._build_ui()
 
@@ -103,10 +110,30 @@ class VoiceChatApp:
         return sorted(langs.items(), key=lambda item: item[1])
 
     def _append_text(self, speaker: str, text: str):
-        self.text_area.configure(state=tk.NORMAL)
-        self.text_area.insert(tk.END, f"{speaker}: {text}\n")
-        self.text_area.configure(state=tk.DISABLED)
-        self.text_area.see(tk.END)
+        text_widget = self.text_area.text
+        text_widget.configure(state=tk.NORMAL)
+        text_widget.insert(tk.END, f"{speaker}: ")
+        idx = 0
+        for match in self.pollinations_pattern.finditer(text):
+            pre = text[idx:match.start()]
+            if pre:
+                text_widget.insert(tk.END, pre)
+            url = match.group(0)
+            photo = self._fetch_image(url)
+            if photo:
+                text_widget.image_create(tk.END, image=photo)
+            else:
+                tag = f"img{self.url_counter}"
+                self.url_counter += 1
+                text_widget.insert(tk.END, "[Image]", tag)
+                text_widget.tag_config(tag, foreground="blue", underline=True)
+                text_widget.tag_bind(tag, "<Button-1>", lambda e, url=url: webbrowser.open_new(url))
+            idx = match.end()
+        if idx < len(text):
+            text_widget.insert(tk.END, text[idx:])
+        text_widget.insert(tk.END, "\n")
+        text_widget.configure(state=tk.DISABLED)
+        text_widget.see(tk.END)
 
     def _send_text(self):
         text = self.entry.get().strip()
@@ -156,7 +183,20 @@ class VoiceChatApp:
         if self.voice_enabled.get():
             self._speak(response)
 
+    def _play_audio(self, path: str):
+        if os.name == "nt":
+            import ctypes
+
+            alias = f"vc{threading.get_ident()}"
+            mci = ctypes.windll.winmm.mciSendStringW
+            mci(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
+            mci(f'play {alias} wait', None, 0, None)
+            mci(f'close {alias}', None, 0, None)
+        else:
+            playsound(path)
+
     def _speak(self, text: str):
+        text = self.pollinations_pattern.sub("", text)
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
         for sentence in sentences:
             temp_name = None
@@ -165,7 +205,7 @@ class VoiceChatApp:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                     temp_name = fp.name
                 tts.save(temp_name)
-                playsound(temp_name)
+                self._play_audio(temp_name)
             except Exception as e:
                 self._append_text("System", f"Audio playback failed: {e}")
             finally:
@@ -174,6 +214,17 @@ class VoiceChatApp:
                         os.remove(temp_name)
                     except OSError:
                         pass
+
+    def _fetch_image(self, url: str) -> ImageTk.PhotoImage | None:
+        try:
+            with urlopen(url) as resp:
+                data = resp.read()
+            image = Image.open(BytesIO(data))
+            photo = ImageTk.PhotoImage(image)
+            self.images.append(photo)
+            return photo
+        except Exception:
+            return None
 
     def run(self):
         self.root.mainloop()
