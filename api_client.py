@@ -3,6 +3,7 @@ import random
 import time
 from typing import Any, Dict, List
 
+import asyncio
 import requests
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,15 @@ class APIClient:
                 )
                 time.sleep(delay)
                 continue
+            except RuntimeError as e:
+                if "Event loop is closed" in str(e):
+                    logger.warning("Event loop closed, recreating loop and retrying")
+                    asyncio.set_event_loop(asyncio.new_event_loop())
+                    delay = self.retry_delay * (2 ** attempt) + random.uniform(0, 0.1)
+                    time.sleep(delay)
+                    continue
+                logger.error(f"Unexpected runtime error {e}")
+                return f"Error: Unexpected runtime error {e}"
             except Exception as e:
                 logger.error(f"Unexpected exception {e}")
                 return f"Error: Unexpected exception {e}"

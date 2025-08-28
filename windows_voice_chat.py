@@ -8,8 +8,6 @@ from tkinter import filedialog
 from io import BytesIO
 import urllib.parse
 
-import asyncio
-import inspect
 
 import requests
 import ttkbootstrap as ttk
@@ -96,8 +94,6 @@ class VoiceChatApp:
         # Fetch available models
         try:
             self.models = self.client.fetch_models()
-            if inspect.isawaitable(self.models):
-                self.models = asyncio.run(self.models)
         except Exception:
             self.models = [{"name": self.config.default_model, "description": ""}]
         self.model_descriptions = {
@@ -506,15 +502,6 @@ class VoiceChatApp:
             response = self.client.send_message(
                 request_messages, self.selected_model.get()
             )
-            if inspect.isawaitable(response):
-                try:
-                    response = asyncio.run(response)
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    try:
-                        response = loop.run_until_complete(response)
-                    finally:
-                        loop.close()
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
             self.ignore_mic = False
