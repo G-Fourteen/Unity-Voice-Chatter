@@ -8,7 +8,6 @@ from tkinter import filedialog
 from io import BytesIO
 import urllib.request
 import ttkbootstrap as ttk
-from ttkbootstrap.scrolled import ScrolledText
 from gtts import gTTS
 from gtts.lang import tts_langs
 from PIL import Image, ImageTk
@@ -150,22 +149,27 @@ class VoiceChatApp:
         )
         exit_button.pack(side=tk.LEFT, padx=5)
 
-        self.text_area = ScrolledText(
-            self.root,
-            wrap=tk.WORD,
-            state=tk.DISABLED,
-            padding=5,
+        chat_container = ttk.Frame(self.root, style="Neon.TFrame")
+        chat_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.canvas = tk.Canvas(chat_container, bg="black", highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scrollbar = ttk.Scrollbar(
+            chat_container, orient=tk.VERTICAL, command=self.canvas.yview
         )
-        self.text_area.configure(style="Neon.TFrame")
-        self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        text_widget = self.text_area.text
-        text_widget.configure(bg="black", fg=self.neon, insertbackground=self.neon)
-        # Message tags for different roles
-        text_widget.tag_configure("user", background="#222222", foreground=self.neon)
-        text_widget.tag_configure(
-            "assistant", background="#333333", foreground=self.neon
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.chat_frame = ttk.Frame(self.canvas, style="Neon.TFrame")
+        self.chat_window = self.canvas.create_window(
+            (0, 0), window=self.chat_frame, anchor="nw"
         )
-        text_widget.tag_configure("system", background="black", foreground=self.neon)
+        self.chat_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
+        )
+        self.canvas.bind(
+            "<Configure>",
+            lambda e: self.canvas.itemconfigure(self.chat_window, width=e.width),
+        )
 
         bottom_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         bottom_frame.pack(fill=tk.X)
@@ -191,49 +195,24 @@ class VoiceChatApp:
         clear_button.pack(side=tk.LEFT, padx=5)
 
     def _build_message(self, content):
-        """Parse text, image links, code blocks, and memories from the API response."""
-        images = []
+        """Return content as-is without filtering URLs or tags."""
         if isinstance(content, list):
-            text_parts = []
+            parts = []
             for item in content:
                 if isinstance(item, dict):
                     if item.get("type") == "text":
-                        text_parts.append(item.get("text", ""))
+                        parts.append(item.get("text", ""))
                     elif item.get("type") == "image_url":
                         url = item.get("image_url", {}).get("url")
                         if url:
-                            images.append(url)
-            text = "\n".join(text_parts)
+                            parts.append(url)
+            text = "\n".join(parts)
         else:
-            text = content if isinstance(content, str) else ("" if content is None else str(content))
-
-        md_image_pattern = r"!\[[^\]]*\]\((https?://[^\s)]+)\)"
-        images += re.findall(md_image_pattern, text)
-        text = re.sub(md_image_pattern, "", text)
-
-        url_pattern = r"(https?://[^\s]+)"
-        images += re.findall(url_pattern, text)
-        text = re.sub(url_pattern, "", text)
-
-        text = re.sub(r"\[image\]", "", text, flags=re.IGNORECASE)
-
-        memory_pattern = r"\[memory\](.*?)\[/memory\]"
-        memories = re.findall(memory_pattern, text, flags=re.DOTALL)
-        text = re.sub(memory_pattern, "", text, flags=re.DOTALL)
-
-        code_pattern = r"\[CODE\]\s*([\w#+-]*)\n(.*?)\n\[/CODE\]"
-        codes = re.findall(code_pattern, text, flags=re.DOTALL)
-        text = re.sub(code_pattern, "", text, flags=re.DOTALL)
-
-        fence_pattern = r"```([\w#+-]*)\n(.*?)```"
-        fence_codes = re.findall(fence_pattern, text, flags=re.DOTALL)
-        text = re.sub(fence_pattern, "", text, flags=re.DOTALL)
-
-        codes.extend(fence_codes)
-        return text.strip(), images, codes, [m.strip() for m in memories]
+            text = "" if content is None else str(content)
+        return text, [], [], []
 
     def _append_code_block(self, language: str, code: str):
-        container = ttk.Frame(self.text_area.text, style="Neon.TFrame")
+        container = ttk.Frame(self.chat_frame, style="Neon.TFrame")
 
         header = ttk.Frame(container, style="Neon.TFrame")
         header.pack(fill=tk.X)
@@ -281,12 +260,9 @@ class VoiceChatApp:
         code_widget.configure(state=tk.DISABLED)
         code_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        text_widget = self.text_area.text
-        text_widget.configure(state=tk.NORMAL)
-        text_widget.window_create(tk.END, window=container)
-        text_widget.insert(tk.END, "\n")
-        text_widget.configure(state=tk.DISABLED)
-        text_widget.see(tk.END)
+        container.pack(anchor="w", fill=tk.X, padx=10, pady=4)
+        self.canvas.update_idletasks()
+        self.canvas.yview_moveto(1.0)
 
     def _append_image(self, url: str):
         try:
@@ -295,13 +271,12 @@ class VoiceChatApp:
                 image_data = BytesIO(resp.read())
             img = Image.open(image_data)
             photo = ImageTk.PhotoImage(img)
-            text_widget = self.text_area.text
-            text_widget.configure(state=tk.NORMAL)
-            text_widget.image_create(tk.END, image=photo)
-            text_widget.insert(tk.END, "\n")
-            text_widget.configure(state=tk.DISABLED)
-            text_widget.see(tk.END)
+            label = tk.Label(self.chat_frame, image=photo, bg="black")
+            label.image = photo
+            label.pack(anchor="w", padx=10, pady=4)
             self._image_refs.append(photo)
+            self.canvas.update_idletasks()
+            self.canvas.yview_moveto(1.0)
         except Exception as e:
             self._append_text("System", f"Failed to load image: {e}", role="system")
 
@@ -333,19 +308,36 @@ class VoiceChatApp:
         return self.selected_voice.get()
 
     def _append_text(self, speaker: str, text: str, role: str = "system"):
-        text_widget = self.text_area.text
-        text_widget.configure(state=tk.NORMAL)
-        tag = role if role in {"user", "assistant", "system"} else "system"
-        text_widget.insert(tk.END, f"{speaker}: {text}\n", tag)
-        text_widget.configure(state=tk.DISABLED)
-        text_widget.see(tk.END)
+        bubble = ttk.Frame(self.chat_frame, style="Neon.TFrame")
+        tag_label = tk.Label(
+            bubble,
+            text=speaker,
+            font=("Segoe UI", 12, "bold"),
+            bg="black",
+            fg=self.neon,
+        )
+        tag_label.pack(anchor="e" if role == "user" else "w")
+        bg = "#0b93f6" if role == "user" else "#333333"
+        msg_label = tk.Label(
+            bubble,
+            text=text,
+            wraplength=400,
+            justify=tk.RIGHT if role == "user" else tk.LEFT,
+            bg=bg,
+            fg="white",
+            padx=10,
+            pady=6,
+            font=("Segoe UI", 10),
+        )
+        msg_label.pack(anchor="e" if role == "user" else "w")
+        bubble.pack(anchor="e" if role == "user" else "w", padx=10, pady=4)
+        self.canvas.update_idletasks()
+        self.canvas.yview_moveto(1.0)
 
     def _clear_chat(self):
         self.messages = [{"role": "system", "content": self.config.system_instructions}]
-        text_widget = self.text_area.text
-        text_widget.configure(state=tk.NORMAL)
-        text_widget.delete("1.0", tk.END)
-        text_widget.configure(state=tk.DISABLED)
+        for widget in self.chat_frame.winfo_children():
+            widget.destroy()
         self.stop_audio = True
         self.ignore_mic = False
 
@@ -416,25 +408,23 @@ class VoiceChatApp:
             self.ignore_mic = False
             return
 
-        cleaned, image_urls, code_blocks, memories = self._build_message(response)
-        assistant_content = (
-            cleaned if cleaned else ("[Image]" if image_urls else "[No content]")
-        )
+        text, image_urls, code_blocks, memories = self._build_message(response)
+        assistant_content = text if text else "[No content]"
         self.messages.append({"role": "assistant", "content": assistant_content})
         for mem in memories:
             self.messages.append({"role": "system", "content": mem})
             self._append_text("System", f"Saved memory: {mem}", role="system")
-        if cleaned:
-            self._append_text("AI", cleaned, role="assistant")
+        if text:
+            self._append_text("AI", text, role="assistant")
             if self.voice_enabled.get():
-                self._speak(cleaned)
+                self._speak(text)
             else:
                 self.ignore_mic = False
         for lang, code in code_blocks:
             self._append_code_block(lang or "", code)
         for url in image_urls:
             self._append_image(url)
-        if not cleaned or not self.voice_enabled.get():
+        if not text or not self.voice_enabled.get():
             self.ignore_mic = False
 
     def _play_audio(self, path: str):
