@@ -13,6 +13,7 @@ from gtts import gTTS
 from PIL import Image, ImageTk
 from playsound import playsound
 import speech_recognition as sr
+from google.cloud import texttospeech
 
 from app_config import Config
 from api_client import APIClient
@@ -24,12 +25,22 @@ class VoiceChatApp:
     def __init__(self):
         self.config = Config()
         self.client = APIClient(self.config)
-        self.root = ttk.Window(themename="flatly")
+        self.root = ttk.Window(themename="darkly")
         self.root.title("Unity Voice Chat")
         self.root.option_add("*Font", ("Segoe UI", 10))
+        self.root.configure(bg="black")
+
+        self._style = ttk.Style()
+        neon = "#39FF14"
+        self._style.configure("Neon.TFrame", background="black")
+        self._style.configure("Neon.TCheckbutton", background="black", foreground=neon)
+        self._style.configure("Neon.TButton", background="black", foreground=neon)
+        self._style.configure("Neon.TEntry", fieldbackground="black", foreground=neon, insertcolor=neon)
+        self._style.configure("Neon.TCombobox", fieldbackground="black", foreground=neon, background="black")
+        self.neon = neon
 
         self.voice_enabled = tk.BooleanVar(value=True)
-        self.selected_voice = tk.StringVar(value="en")
+        self.selected_voice = tk.StringVar()
         self.messages = [
             {"role": "system", "content": self.config.system_instructions}
         ]
@@ -43,27 +54,28 @@ class VoiceChatApp:
         self._build_ui()
 
     def _build_ui(self):
-        top_frame = ttk.Frame(self.root, padding=5)
+        top_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         top_frame.pack(fill=tk.X)
 
         voice_check = ttk.Checkbutton(
             top_frame,
             text="Voice Output",
             variable=self.voice_enabled,
-            bootstyle="round-toggle"
+            style="Neon.TCheckbutton",
         )
         voice_check.pack(side=tk.LEFT)
 
         voices = self._available_voices()
-        self.voice_map = {name: code for code, name in voices}
+        self.voice_map = {display: name for name, display in voices}
         self.selected_voice.set(voices[0][0])
         self.voice_display = tk.StringVar(value=voices[0][1])
         voice_menu = ttk.Combobox(
             top_frame,
             textvariable=self.voice_display,
-            values=[name for _, name in voices],
+            values=list(self.voice_map.keys()),
             state="readonly",
-            width=25,
+            width=35,
+            style="Neon.TCombobox",
         )
         voice_menu.pack(side=tk.LEFT, padx=5)
         voice_menu.bind(
@@ -75,7 +87,7 @@ class VoiceChatApp:
             top_frame,
             text="Start Talking",
             command=self._toggle_listening,
-            bootstyle="info-outline",
+            style="Neon.TButton",
         )
         self.start_button.pack(side=tk.LEFT, padx=5)
 
@@ -84,13 +96,15 @@ class VoiceChatApp:
             wrap=tk.WORD,
             state=tk.DISABLED,
             padding=5,
+            style="Neon.TFrame",
         )
         self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.text_area.text.configure(bg="black", fg=self.neon, insertbackground=self.neon)
 
-        bottom_frame = ttk.Frame(self.root, padding=5)
+        bottom_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         bottom_frame.pack(fill=tk.X)
 
-        self.entry = ttk.Entry(bottom_frame)
+        self.entry = ttk.Entry(bottom_frame, style="Neon.TEntry")
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         self.entry.bind("<Return>", lambda event: self._send_text())
 
@@ -98,7 +112,7 @@ class VoiceChatApp:
             bottom_frame,
             text="Send",
             command=self._send_text,
-            bootstyle="primary",
+            style="Neon.TButton",
         )
         send_button.pack(side=tk.LEFT)
 
@@ -127,10 +141,24 @@ class VoiceChatApp:
             self._append_text("System", f"Failed to load image: {e}")
 
     def _available_voices(self):
-        from gtts.lang import tts_langs
+        """Fetch available English female voices from Google Cloud TTS."""
+        voices: list[tuple[str, str]] = []
+        try:
+            client = texttospeech.TextToSpeechClient()
+            response = client.list_voices()
+            for voice in response.voices:
+                if voice.ssml_gender == texttospeech.SsmlVoiceGender.FEMALE and any(
+                    code.startswith("en-") for code in voice.language_codes
+                ):
+                    display = f"{voice.name} ({voice.language_codes[0]})"
+                    voices.append((voice.name, display))
+        except Exception:
+            pass
+        return voices or [("en-GB-Wavenet-F", "en-GB-Wavenet-F")]
 
-        langs = tts_langs()  # {code: language name}
-        return sorted(langs.items(), key=lambda item: item[1])
+    def _language_from_voice(self) -> str:
+        name = self.selected_voice.get()
+        return "-".join(name.split("-")[:2])
 
     def _append_text(self, speaker: str, text: str):
         text_widget = self.text_area.text
@@ -165,7 +193,7 @@ class VoiceChatApp:
             while self.listening:
                 try:
                     audio = r.listen(source, timeout=1, phrase_time_limit=8)
-                    text = r.recognize_google(audio, language=self.selected_voice.get())
+                    text = r.recognize_google(audio, language=self._language_from_voice())
                     self._append_text("You", text)
                     self.messages.append({"role": "user", "content": text})
                     threading.Thread(target=self._get_response, args=(list(self.messages),)).start()
@@ -206,13 +234,28 @@ class VoiceChatApp:
 
     def _speak(self, text: str):
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
+        try:
+            client = texttospeech.TextToSpeechClient()
+        except Exception as e:
+            self._append_text("System", f"Audio playback failed: {e}")
+            return
         for sentence in sentences:
             temp_name = None
             try:
-                tts = gTTS(sentence, lang=self.selected_voice.get())
+                synthesis_input = texttospeech.SynthesisInput(text=sentence)
+                language = self._language_from_voice()
+                voice_params = texttospeech.VoiceSelectionParams(
+                    language_code=language, name=self.selected_voice.get()
+                )
+                audio_config = texttospeech.AudioConfig(
+                    audio_encoding=texttospeech.AudioEncoding.MP3
+                )
+                response = client.synthesize_speech(
+                    input=synthesis_input, voice=voice_params, audio_config=audio_config
+                )
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
                     temp_name = fp.name
-                tts.save(temp_name)
+                    fp.write(response.audio_content)
                 self._play_audio(temp_name)
             except Exception as e:
                 self._append_text("System", f"Audio playback failed: {e}")
