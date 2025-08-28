@@ -1,6 +1,5 @@
 aiohttp
-gTTS
-playsound
+pyttsx3
 SpeechRecognition
 pyaudio
 python-dotenv
