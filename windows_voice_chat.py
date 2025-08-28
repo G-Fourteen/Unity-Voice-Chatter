@@ -66,7 +66,6 @@ class VoiceChatApp:
 
         # Keep references to images inserted in the chat to avoid garbage collection
         self._image_refs: list[ImageTk.PhotoImage] = []
-        self.memories: list[str] = []
 
         # Audio control
         self.stop_audio = False
@@ -387,13 +386,12 @@ class VoiceChatApp:
                     self._append_text("System", f"Speech recognition error: {e}")
 
     def _get_response(self, messages):
-        request_messages = (
-            messages[:1]
-            + [{"role": "system", "content": m} for m in self.memories]
-            + messages[1:]
-        )
         try:
             response = self.client.send_message(request_messages, self.selected_model.get())
+
+            response = self.client.send_message(
+                messages, self.selected_model.get()
+            )
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
             self.ignore_mic = False
@@ -402,7 +400,7 @@ class VoiceChatApp:
         cleaned, image_urls, code_blocks, memories = self._build_message(response)
         self.messages.append({"role": "assistant", "content": cleaned})
         for mem in memories:
-            self.memories.append(mem)
+            self.messages.append({"role": "system", "content": mem})
             self._append_text("System", f"Saved memory: {mem}")
         if cleaned:
             self._append_text("AI", cleaned)
