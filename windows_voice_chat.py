@@ -51,20 +51,6 @@ class VoiceChatApp:
             "Neon.TCombobox", fieldbackground="black", foreground=neon, background="black"
         )
         self._style.configure("Neon.TLabel", background="black", foreground=neon)
-        self._style.configure(
-            "UserBubble.TLabel",
-            background="#222222",
-            foreground=neon,
-            borderwidth=1,
-            relief="solid",
-        )
-        self._style.configure(
-            "AIBubble.TLabel",
-            background="#333333",
-            foreground=neon,
-            borderwidth=1,
-            relief="solid",
-        )
         self.neon = neon
 
         self.voice_enabled = tk.BooleanVar(value=True)
@@ -172,9 +158,14 @@ class VoiceChatApp:
         )
         self.text_area.configure(style="Neon.TFrame")
         self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.text_area.text.configure(
-            bg="black", fg=self.neon, insertbackground=self.neon
+        text_widget = self.text_area.text
+        text_widget.configure(bg="black", fg=self.neon, insertbackground=self.neon)
+        # Message tags for different roles
+        text_widget.tag_configure("user", background="#222222", foreground=self.neon)
+        text_widget.tag_configure(
+            "assistant", background="#333333", foreground=self.neon
         )
+        text_widget.tag_configure("system", background="black", foreground=self.neon)
 
         bottom_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         bottom_frame.pack(fill=tk.X)
@@ -198,22 +189,6 @@ class VoiceChatApp:
             style="Neon.TButton",
         )
         clear_button.pack(side=tk.LEFT, padx=5)
-
-    def _insert_widget(self, widget, role: str = "system"):
-        """Insert a widget into the chat area aligned by role."""
-        text_widget = self.text_area.text
-        text_widget.update_idletasks()
-        frame_width = text_widget.winfo_width()
-        line = ttk.Frame(text_widget, style="Neon.TFrame", width=frame_width)
-        line.pack_propagate(False)
-        side = tk.RIGHT if role == "assistant" else tk.LEFT
-        anchor = tk.E if side == tk.RIGHT else tk.W
-        widget.pack(in_=line, side=side, anchor=anchor, padx=5, pady=2)
-        text_widget.configure(state=tk.NORMAL)
-        text_widget.window_create(tk.END, window=line)
-        text_widget.insert(tk.END, "\n")
-        text_widget.configure(state=tk.DISABLED)
-        text_widget.see(tk.END)
 
     def _build_message(self, content):
         """Parse text, image links, code blocks, and memories from the API response."""
@@ -306,7 +281,12 @@ class VoiceChatApp:
         code_widget.configure(state=tk.DISABLED)
         code_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self._insert_widget(container, role="assistant")
+        text_widget = self.text_area.text
+        text_widget.configure(state=tk.NORMAL)
+        text_widget.window_create(tk.END, window=container)
+        text_widget.insert(tk.END, "\n")
+        text_widget.configure(state=tk.DISABLED)
+        text_widget.see(tk.END)
 
     def _append_image(self, url: str):
         try:
@@ -315,9 +295,13 @@ class VoiceChatApp:
                 image_data = BytesIO(resp.read())
             img = Image.open(image_data)
             photo = ImageTk.PhotoImage(img)
-            label = ttk.Label(self.text_area.text, image=photo, style="Neon.TLabel")
+            text_widget = self.text_area.text
+            text_widget.configure(state=tk.NORMAL)
+            text_widget.image_create(tk.END, image=photo)
+            text_widget.insert(tk.END, "\n")
+            text_widget.configure(state=tk.DISABLED)
+            text_widget.see(tk.END)
             self._image_refs.append(photo)
-            self._insert_widget(label, role="assistant")
         except Exception as e:
             self._append_text("System", f"Failed to load image: {e}", role="system")
 
@@ -349,19 +333,12 @@ class VoiceChatApp:
         return self.selected_voice.get()
 
     def _append_text(self, speaker: str, text: str, role: str = "system"):
-        bubble_style = (
-            "UserBubble.TLabel"
-            if role == "user"
-            else "AIBubble.TLabel" if role == "assistant" else "Neon.TLabel"
-        )
-        bubble = ttk.Label(
-            self.text_area.text,
-            text=f"{speaker}: {text}",
-            style=bubble_style,
-            padding=5,
-            wraplength=400,
-        )
-        self._insert_widget(bubble, role)
+        text_widget = self.text_area.text
+        text_widget.configure(state=tk.NORMAL)
+        tag = role if role in {"user", "assistant", "system"} else "system"
+        text_widget.insert(tk.END, f"{speaker}: {text}\n", tag)
+        text_widget.configure(state=tk.DISABLED)
+        text_widget.see(tk.END)
 
     def _clear_chat(self):
         self.messages = [{"role": "system", "content": self.config.system_instructions}]
