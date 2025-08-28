@@ -1,5 +1,4 @@
 aiohttp
-gTTS
 playsound
 SpeechRecognition
 pyaudio
@@ -7,3 +6,4 @@ python-dotenv
 ttkbootstrap
 requests
 Pillow
+google-cloud-texttospeech
