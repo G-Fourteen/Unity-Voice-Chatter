@@ -96,10 +96,12 @@ class VoiceChatApp:
             wrap=tk.WORD,
             state=tk.DISABLED,
             padding=5,
-            style="Neon.TFrame",
         )
+        self.text_area.configure(style="Neon.TFrame")
         self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        self.text_area.text.configure(bg="black", fg=self.neon, insertbackground=self.neon)
+        self.text_area.text.configure(
+            bg="black", fg=self.neon, insertbackground=self.neon
+        )
 
         bottom_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         bottom_frame.pack(fill=tk.X)
