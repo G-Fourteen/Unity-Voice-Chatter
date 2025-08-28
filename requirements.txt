@@ -1,9 +1,6 @@
-discord.py>=2.0.0
 aiohttp
-aiosqlite
-pillow
-apscheduler
-langdetect
-googletrans==4.0.0-rc1
-aiofiles
+gTTS
+playsound
+SpeechRecognition
+pyaudio
 python-dotenv
