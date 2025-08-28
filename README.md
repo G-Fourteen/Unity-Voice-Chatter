@@ -12,6 +12,7 @@ with optional text-to-speech and speech-to-text capabilities.
 - Dropdown with full language names for all Google TTS languages
 - Basic chat log and memory of the current session
 - Code blocks rendered with copy and download buttons
+- Model selector populated dynamically from `text.pollinations.ai/models`
 
 ## Getting Started
 1. Install dependencies:

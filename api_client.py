@@ -52,7 +52,10 @@ class APIClient:
         return "Error: Upstream API unreachable after retries"
 
     async def fetch_models(self) -> List[Dict[str, str]]:
-        result = await self._request_json("GET", self.config.models_url, timeout=15)
+        headers = {"Authorization": f"Bearer {self.config.pollinations_token}"}
+        result = await self._request_json(
+            "GET", self.config.models_url, headers=headers, timeout=15
+        )
         if isinstance(result, list):
             if all(isinstance(m, str) for m in result):
                 return [{"name": m.strip()} for m in result]
@@ -66,18 +69,14 @@ class APIClient:
         if not model or not isinstance(model, str) or model.strip() == "":
             model = self.config.default_model
         logger.info(f"Using model: {model}")
-        payload = {
-            "messages": messages,
-            "model": model,
-            "temperature": 0.7,
-            "max_tokens": 1024,
-            "stream": False,
-        }
+        payload = {"messages": messages, "model": model}
+        headers = {"Authorization": f"Bearer {self.config.pollinations_token}"}
         try:
             result = await self._request_json(
                 "POST",
                 self.config.api_url,
                 json=payload,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             )
         except asyncio.TimeoutError:
