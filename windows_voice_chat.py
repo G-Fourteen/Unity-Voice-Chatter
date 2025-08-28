@@ -6,7 +6,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 from io import BytesIO
-import requests
+import urllib.request
 import ttkbootstrap as ttk
 from ttkbootstrap.scrolled import ScrolledText
 from gtts import gTTS
@@ -51,6 +51,20 @@ class VoiceChatApp:
             "Neon.TCombobox", fieldbackground="black", foreground=neon, background="black"
         )
         self._style.configure("Neon.TLabel", background="black", foreground=neon)
+        self._style.configure(
+            "UserBubble.TLabel",
+            background="#222222",
+            foreground=neon,
+            borderwidth=1,
+            relief="solid",
+        )
+        self._style.configure(
+            "AIBubble.TLabel",
+            background="#333333",
+            foreground=neon,
+            borderwidth=1,
+            relief="solid",
+        )
         self.neon = neon
 
         self.voice_enabled = tk.BooleanVar(value=True)
@@ -185,6 +199,22 @@ class VoiceChatApp:
         )
         clear_button.pack(side=tk.LEFT, padx=5)
 
+    def _insert_widget(self, widget, role: str = "system"):
+        """Insert a widget into the chat area aligned by role."""
+        text_widget = self.text_area.text
+        text_widget.update_idletasks()
+        frame_width = text_widget.winfo_width()
+        line = ttk.Frame(text_widget, style="Neon.TFrame", width=frame_width)
+        line.pack_propagate(False)
+        side = tk.RIGHT if role == "assistant" else tk.LEFT
+        anchor = tk.E if side == tk.RIGHT else tk.W
+        widget.pack(in_=line, side=side, anchor=anchor, padx=5, pady=2)
+        text_widget.configure(state=tk.NORMAL)
+        text_widget.window_create(tk.END, window=line)
+        text_widget.insert(tk.END, "\n")
+        text_widget.configure(state=tk.DISABLED)
+        text_widget.see(tk.END)
+
     def _build_message(self, content):
         """Parse text, image links, code blocks, and memories from the API response."""
         images = []
@@ -276,29 +306,20 @@ class VoiceChatApp:
         code_widget.configure(state=tk.DISABLED)
         code_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        text_widget = self.text_area.text
-        text_widget.configure(state=tk.NORMAL)
-        text_widget.window_create(tk.END, window=container)
-        text_widget.insert(tk.END, "\n")
-        text_widget.configure(state=tk.DISABLED)
-        text_widget.see(tk.END)
+        self._insert_widget(container, role="assistant")
 
     def _append_image(self, url: str):
         try:
-            resp = requests.get(requests.utils.requote_uri(url), timeout=30)
-            resp.raise_for_status()
-            image_data = BytesIO(resp.content)
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                image_data = BytesIO(resp.read())
             img = Image.open(image_data)
             photo = ImageTk.PhotoImage(img)
-            text_widget = self.text_area.text
-            text_widget.configure(state=tk.NORMAL)
-            text_widget.image_create(tk.END, image=photo)
-            text_widget.insert(tk.END, "\n")
-            text_widget.configure(state=tk.DISABLED)
-            text_widget.see(tk.END)
+            label = ttk.Label(self.text_area.text, image=photo, style="Neon.TLabel")
             self._image_refs.append(photo)
+            self._insert_widget(label, role="assistant")
         except Exception as e:
-            self._append_text("System", f"Failed to load image: {e}")
+            self._append_text("System", f"Failed to load image: {e}", role="system")
 
     def _available_voices(self):
         """Return available common voices using gTTS languages."""
@@ -327,12 +348,20 @@ class VoiceChatApp:
     def _language_from_voice(self) -> str:
         return self.selected_voice.get()
 
-    def _append_text(self, speaker: str, text: str):
-        text_widget = self.text_area.text
-        text_widget.configure(state=tk.NORMAL)
-        text_widget.insert(tk.END, f"{speaker}: {text}\n")
-        text_widget.configure(state=tk.DISABLED)
-        text_widget.see(tk.END)
+    def _append_text(self, speaker: str, text: str, role: str = "system"):
+        bubble_style = (
+            "UserBubble.TLabel"
+            if role == "user"
+            else "AIBubble.TLabel" if role == "assistant" else "Neon.TLabel"
+        )
+        bubble = ttk.Label(
+            self.text_area.text,
+            text=f"{speaker}: {text}",
+            style=bubble_style,
+            padding=5,
+            wraplength=400,
+        )
+        self._insert_widget(bubble, role)
 
     def _clear_chat(self):
         self.messages = [{"role": "system", "content": self.config.system_instructions}]
@@ -363,7 +392,7 @@ class VoiceChatApp:
         if not text:
             return
         self.entry.delete(0, tk.END)
-        self._append_text("You", text)
+        self._append_text("You", text, role="user")
         self.messages.append({"role": "user", "content": text})
         self.ignore_mic = True
         threading.Thread(target=self._get_response, args=(list(self.messages),)).start()
@@ -389,16 +418,16 @@ class VoiceChatApp:
                 try:
                     audio = r.listen(source, timeout=1, phrase_time_limit=8)
                     text = r.recognize_google(audio, language=self._language_from_voice())
-                    self._append_text("You", text)
+                    self._append_text("You", text, role="user")
                     self.messages.append({"role": "user", "content": text})
                     self.ignore_mic = True
                     threading.Thread(target=self._get_response, args=(list(self.messages),)).start()
                 except sr.WaitTimeoutError:
                     continue
                 except sr.UnknownValueError:
-                    self._append_text("System", "Couldn't understand audio")
+                    self._append_text("System", "Couldn't understand audio", role="system")
                 except sr.RequestError as e:
-                    self._append_text("System", f"Speech recognition error: {e}")
+                    self._append_text("System", f"Speech recognition error: {e}", role="system")
 
     def _get_response(self, messages):
         try:
@@ -406,7 +435,7 @@ class VoiceChatApp:
                 messages, self.selected_model.get()
             )
         except Exception as e:
-            self._append_text("System", f"Error contacting API: {e}")
+            self._append_text("System", f"Error contacting API: {e}", role="system")
             self.ignore_mic = False
             return
 
@@ -417,9 +446,9 @@ class VoiceChatApp:
         self.messages.append({"role": "assistant", "content": assistant_content})
         for mem in memories:
             self.messages.append({"role": "system", "content": mem})
-            self._append_text("System", f"Saved memory: {mem}")
+            self._append_text("System", f"Saved memory: {mem}", role="system")
         if cleaned:
-            self._append_text("AI", cleaned)
+            self._append_text("AI", cleaned, role="assistant")
             if self.voice_enabled.get():
                 self._speak(cleaned)
             else:
@@ -469,7 +498,7 @@ class VoiceChatApp:
                     tts.write_to_fp(fp)
                 self._play_audio(temp_name)
             except Exception as e:
-                self._append_text("System", f"Audio playback failed: {e}")
+                self._append_text("System", f"Audio playback failed: {e}", role="system")
             finally:
                 if temp_name:
                     try:
