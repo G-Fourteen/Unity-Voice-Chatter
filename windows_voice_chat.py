@@ -144,11 +144,17 @@ class VoiceChatApp:
         )
         send_button.pack(side=tk.LEFT)
 
-    def _parse_response(self, text: str):
+    def _build_message(self, text: str):
         """Parse special tags from the AI response."""
-        image_pattern = r"https?://\S*pollinations\.ai\S*"
-        images = re.findall(image_pattern, text)
-        text = re.sub(image_pattern, "", text)
+        # Extract Markdown-style image tags without altering the URL
+        md_image_pattern = r"!\[[^\]]*\]\((https?://[^\s)]+)\)"
+        images = re.findall(md_image_pattern, text)
+        text = re.sub(md_image_pattern, "", text)
+
+        # Also capture any remaining bare URLs
+        url_pattern = r"(https?://[^\s]+)"
+        images += re.findall(url_pattern, text)
+        text = re.sub(url_pattern, "", text)
 
         memory_pattern = r"\[memory\](.*?)\[/memory\]"
         memories = re.findall(memory_pattern, text, flags=re.DOTALL)
@@ -305,7 +311,7 @@ class VoiceChatApp:
             self._append_text("System", f"Error contacting API: {e}")
             return
 
-        cleaned, image_urls, code_blocks, memories = self._parse_response(response)
+        cleaned, image_urls, code_blocks, memories = self._build_message(response)
         self.messages.append({"role": "assistant", "content": response})
         for mem in memories:
             self.memories.append(mem)
