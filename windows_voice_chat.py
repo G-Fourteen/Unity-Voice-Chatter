@@ -4,6 +4,7 @@ import re
 import tempfile
 import threading
 import tkinter as tk
+from tkinter import filedialog
 from io import BytesIO
 
 import requests
@@ -64,6 +65,7 @@ class VoiceChatApp:
 
         # Keep references to images inserted in the chat to avoid garbage collection
         self._image_refs: list[ImageTk.PhotoImage] = []
+        self.memories: list[str] = []
 
         self._build_ui()
 
@@ -142,12 +144,69 @@ class VoiceChatApp:
         )
         send_button.pack(side=tk.LEFT)
 
-    def _process_pollinations(self, text: str):
-        """Remove pollinations image URLs from text and return list of URLs."""
-        pattern = r"https?://\S*pollinations\.ai\S*"
-        urls = re.findall(pattern, text)
-        cleaned = re.sub(pattern, "", text).strip()
-        return cleaned, urls
+    def _parse_response(self, text: str):
+        """Parse special tags from the AI response."""
+        image_pattern = r"https?://\S*pollinations\.ai\S*"
+        images = re.findall(image_pattern, text)
+        text = re.sub(image_pattern, "", text)
+
+        memory_pattern = r"\[memory\](.*?)\[/memory\]"
+        memories = re.findall(memory_pattern, text, flags=re.DOTALL)
+        text = re.sub(memory_pattern, "", text, flags=re.DOTALL)
+
+        code_pattern = r"\[CODE\]\s*([\w#+-]*)\n(.*?)\n\[/CODE\]"
+        codes = re.findall(code_pattern, text, flags=re.DOTALL)
+        text = re.sub(code_pattern, "", text, flags=re.DOTALL)
+
+        return text.strip(), images, codes, [m.strip() for m in memories]
+
+    def _append_code_block(self, language: str, code: str):
+        frame = ttk.Frame(self.text_area.text, style="Neon.TFrame")
+        code_widget = tk.Text(
+            frame,
+            height=max(1, code.count("\n") + 1),
+            width=60,
+            wrap=tk.NONE,
+            bg="black",
+            fg=self.neon,
+            insertbackground=self.neon,
+        )
+        code_widget.insert("1.0", code)
+        code_widget.configure(state=tk.DISABLED)
+        code_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        button_frame = ttk.Frame(frame, style="Neon.TFrame")
+        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def copy_code():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(code)
+
+        def download_code():
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
+            )
+            if filename:
+                try:
+                    with open(filename, "w", encoding="utf-8") as f:
+                        f.write(code)
+                except OSError:
+                    pass
+
+        ttk.Button(
+            button_frame, text="Copy", command=copy_code, style="Neon.TButton"
+        ).pack(fill=tk.X)
+        ttk.Button(
+            button_frame, text="Download", command=download_code, style="Neon.TButton"
+        ).pack(fill=tk.X)
+
+        text_widget = self.text_area.text
+        text_widget.configure(state=tk.NORMAL)
+        text_widget.window_create(tk.END, window=frame)
+        text_widget.insert(tk.END, "\n")
+        text_widget.configure(state=tk.DISABLED)
+        text_widget.see(tk.END)
 
     def _append_image(self, url: str):
         try:
@@ -239,17 +298,24 @@ class VoiceChatApp:
 
     def _get_response(self, messages):
         try:
-            response = asyncio.run(self.client.send_message(messages, None))
+            response = asyncio.run(
+                self.client.send_message(messages, self.config.default_model)
+            )
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
             return
 
-        cleaned, image_urls = self._process_pollinations(response)
+        cleaned, image_urls, code_blocks, memories = self._parse_response(response)
         self.messages.append({"role": "assistant", "content": response})
+        for mem in memories:
+            self.memories.append(mem)
+            self._append_text("System", f"Saved memory: {mem}")
         if cleaned:
             self._append_text("AI", cleaned)
             if self.voice_enabled.get():
                 self._speak(cleaned)
+        for lang, code in code_blocks:
+            self._append_code_block(lang or "", code)
         for url in image_urls:
             self._append_image(url)
 
