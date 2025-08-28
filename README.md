@@ -11,6 +11,7 @@ with optional text-to-speech and speech-to-text capabilities.
 - Sentence-by-sentence speech synthesis to avoid cut-off on long replies
 - Dropdown with full language names for all Google TTS languages
 - Basic chat log and memory of the current session
+- Code blocks rendered with copy and download buttons
 
 ## Getting Started
 1. Install dependencies:
