@@ -1,4 +1,3 @@
-import asyncio
 import os
 import re
 import tempfile
@@ -93,7 +92,7 @@ class VoiceChatApp:
 
         # Fetch available models
         try:
-            self.models = asyncio.run(self.client.fetch_models())
+            self.models = self.client.fetch_models()
         except Exception:
             self.models = [{"name": self.config.default_model, "description": ""}]
         self.model_descriptions = {
@@ -475,8 +474,8 @@ class VoiceChatApp:
             + messages[1:]
         )
         try:
-            response = asyncio.run(
-                self.client.send_message(request_messages, self.selected_model.get())
+            response = self.client.send_message(
+                request_messages, self.selected_model.get()
             )
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
