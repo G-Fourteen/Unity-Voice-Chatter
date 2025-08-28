@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import tempfile
 import threading
 import tkinter as tk
 from io import BytesIO
@@ -8,8 +9,10 @@ from io import BytesIO
 import requests
 import ttkbootstrap as ttk
 from ttkbootstrap.scrolled import ScrolledText
-import pyttsx3
+from gtts import gTTS
+from gtts.lang import tts_langs
 from PIL import Image, ImageTk
+from playsound import playsound
 import speech_recognition as sr
 
 from app_config import Config
@@ -57,12 +60,8 @@ class VoiceChatApp:
         self._style.configure("Neon.TLabel", background="black", foreground=neon)
         self.neon = neon
 
-        self.tts_engine = pyttsx3.init()
-
         self.voice_enabled = tk.BooleanVar(value=True)
         self.selected_voice = tk.StringVar()
-        self.pitch = tk.DoubleVar(value=50.0)
-        self.rate = tk.IntVar(value=self.tts_engine.getProperty("rate"))
         self.messages = [
             {"role": "system", "content": self.config.system_instructions}
         ]
@@ -95,16 +94,14 @@ class VoiceChatApp:
             top_frame,
             text="Voice Output",
             variable=self.voice_enabled,
-            command=self._toggle_voice,
             style="Neon.TCheckbutton",
         )
         voice_check.pack(side=tk.LEFT)
 
         voices = self._available_voices()
-        self.voice_map = {display: vid for vid, display in voices}
+        self.voice_map = {display: name for name, display in voices}
         self.selected_voice.set(voices[0][0])
         self.voice_display = tk.StringVar(value=voices[0][1])
-        self.tts_engine.setProperty("voice", self.selected_voice.get())
         voice_menu = ttk.Combobox(
             top_frame,
             textvariable=self.voice_display,
@@ -114,7 +111,10 @@ class VoiceChatApp:
             style="Neon.TCombobox",
         )
         voice_menu.pack(side=tk.LEFT, padx=5)
-        voice_menu.bind("<<ComboboxSelected>>", self._on_voice_change)
+        voice_menu.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.selected_voice.set(self.voice_map[self.voice_display.get()]),
+        )
 
         self.start_button = ttk.Button(
             top_frame,
@@ -123,25 +123,6 @@ class VoiceChatApp:
             style="Neon.TButton",
         )
         self.start_button.pack(side=tk.LEFT, padx=5)
-
-        settings_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
-        settings_frame.pack(fill=tk.X)
-        ttk.Label(settings_frame, text="Pitch", style="Neon.TLabel").pack(side=tk.LEFT)
-        ttk.Scale(
-            settings_frame,
-            from_=0,
-            to=100,
-            variable=self.pitch,
-            command=self._update_pitch,
-        ).pack(side=tk.LEFT, padx=5)
-        ttk.Label(settings_frame, text="Rate", style="Neon.TLabel").pack(side=tk.LEFT)
-        ttk.Scale(
-            settings_frame,
-            from_=50,
-            to=300,
-            variable=self.rate,
-            command=self._update_rate,
-        ).pack(side=tk.LEFT, padx=5)
 
         self.text_area = ScrolledText(
             self.root,
@@ -169,13 +150,6 @@ class VoiceChatApp:
             style="Neon.TButton",
         )
         send_button.pack(side=tk.LEFT)
-        clear_button = ttk.Button(
-            bottom_frame,
-            text="Clear Chat",
-            command=self._clear_chat,
-            style="Neon.TButton",
-        )
-        clear_button.pack(side=tk.LEFT, padx=(5, 0))
 
     def _process_pollinations(self, text: str):
         """Remove pollinations image URLs from text and return list of URLs."""
@@ -202,25 +176,21 @@ class VoiceChatApp:
             self._append_text("System", f"Failed to load image: {e}")
 
     def _available_voices(self):
-        """Return available English voices using pyttsx3."""
+        """Return available English voices using gTTS languages."""
         voices: list[tuple[str, str]] = []
         try:
-            for v in self.tts_engine.getProperty("voices"):
-                langs = [
-                    l.decode("utf-8") if isinstance(l, bytes) else l
-                    for l in getattr(v, "languages", [])
-                ]
-                if any(l.startswith("en") for l in langs) or "english" in v.name.lower():
-                    voices.append((v.id, v.name))
+            languages = tts_langs()
+            for code, name in languages.items():
+                if code.startswith("en"):
+                    voices.append((code, f"{name} ({code})"))
         except Exception:
             pass
         if voices:
             return voices
-        default = self.tts_engine.getProperty("voice")
-        return [(default, "Default")]
+        return [("en", "English (en)")]
 
     def _language_from_voice(self) -> str:
-        return "en-US"
+        return self.selected_voice.get()
 
     def _append_text(self, speaker: str, text: str):
         text_widget = self.text_area.text
@@ -282,56 +252,36 @@ class VoiceChatApp:
         for url in image_urls:
             self._append_image(url)
 
-    def _toggle_voice(self):
-        if not self.voice_enabled.get():
-            try:
-                self.tts_engine.stop()
-            except Exception:
-                pass
+    def _play_audio(self, path: str):
+        if os.name == "nt":
+            import ctypes
 
-    def _on_voice_change(self, event=None):
-        voice_id = self.voice_map[self.voice_display.get()]
-        self.selected_voice.set(voice_id)
-        try:
-            self.tts_engine.setProperty("voice", voice_id)
-        except Exception:
-            pass
-
-    def _update_pitch(self, value=None):
-        try:
-            self.tts_engine.setProperty("pitch", float(self.pitch.get()))
-        except Exception:
-            pass
-
-    def _update_rate(self, value=None):
-        try:
-            self.tts_engine.setProperty("rate", int(self.rate.get()))
-        except Exception:
-            pass
-
-    def _clear_chat(self):
-        self.messages = [{"role": "system", "content": self.config.system_instructions}]
-        text_widget = self.text_area.text
-        text_widget.configure(state=tk.NORMAL)
-        text_widget.delete("1.0", tk.END)
-        text_widget.configure(state=tk.DISABLED)
-        self._image_refs.clear()
+            alias = f"vc{threading.get_ident()}"
+            mci = ctypes.windll.winmm.mciSendStringW
+            mci(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
+            mci(f'play {alias} wait', None, 0, None)
+            mci(f'close {alias}', None, 0, None)
+        else:
+            playsound(path)
 
     def _speak(self, text: str):
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
         for sentence in sentences:
-            if not self.voice_enabled.get():
-                try:
-                    self.tts_engine.stop()
-                except Exception:
-                    pass
-                break
+            temp_name = None
             try:
-                self.tts_engine.say(sentence)
-                self.tts_engine.runAndWait()
+                tts = gTTS(text=sentence, lang=self._language_from_voice())
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+                    temp_name = fp.name
+                    tts.write_to_fp(fp)
+                self._play_audio(temp_name)
             except Exception as e:
                 self._append_text("System", f"Audio playback failed: {e}")
-                break
+            finally:
+                if temp_name:
+                    try:
+                        os.remove(temp_name)
+                    except OSError:
+                        pass
 
     def run(self):
         self.root.mainloop()
