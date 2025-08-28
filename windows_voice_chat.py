@@ -185,15 +185,21 @@ class VoiceChatApp:
         pollinations_urls: list[str] = []
 
         def _pollinations_repl(match: re.Match) -> str:
-            prompt = match.group(1).strip()
-            query = match.group(2)
+            prompt = urllib.parse.unquote(match.group(1).strip())
+            query = match.group(2) or ""
+            params = dict(urllib.parse.parse_qsl(query, keep_blank_values=True))
+            if "model" not in params or not params["model"].strip():
+                params["model"] = self.config.default_model
             encoded = urllib.parse.quote(prompt)
+            new_query = urllib.parse.urlencode(params)
             pollinations_urls.append(
-                f"https://image.pollinations.ai/prompt/{encoded}?{query}"
+                f"https://image.pollinations.ai/prompt/{encoded}?{new_query}"
             )
             return ""
 
-        poll_pattern = r"https://image\.pollinations\.ai/prompt/([^?]+)\?([^\s]+)"
+        poll_pattern = (
+            r"https://image\.pollinations\.ai/prompt/([^?]+)(?:\?([^\s]+))?"
+        )
         text = re.sub(poll_pattern, _pollinations_repl, text)
         images += pollinations_urls
 
@@ -262,7 +268,7 @@ class VoiceChatApp:
 
     def _append_image(self, url: str):
         try:
-            resp = requests.get(url, timeout=10)
+            resp = requests.get(requests.utils.requote_uri(url), timeout=30)
             resp.raise_for_status()
             image_data = BytesIO(resp.content)
             img = Image.open(image_data)
