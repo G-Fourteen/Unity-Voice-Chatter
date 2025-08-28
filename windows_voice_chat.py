@@ -212,11 +212,9 @@ class VoiceChatApp:
         bottom_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         bottom_frame.pack(fill=tk.X, side=tk.BOTTOM)
 
-        self.entry = tk.Entry(
+        self.entry = ttk.Entry(
             bottom_frame,
-            bg="black",
-            fg=self.neon,
-            insertbackground=self.neon,
+            style="Neon.TEntry",
         )
         self._apply_highlight(self.entry)
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
@@ -259,10 +257,13 @@ class VoiceChatApp:
         else:
             text = "" if content is None else str(content)
 
-        # Extract [IMAGE](url) tags from the text
+        # Extract [IMAGE](url) and [IMAGE]url[/IMAGE] tags from the text
         for url in re.findall(r"\[IMAGE\]\(([^)]+)\)", text):
             image_urls.append(url)
-        text = re.sub(r"\[IMAGE\]\([^)]+\)", "", text).strip()
+        for url in re.findall(r"\[IMAGE\](.*?)\[/IMAGE\]", text):
+            image_urls.append(url.strip())
+        text = re.sub(r"\[IMAGE\]\([^)]+\)", "", text)
+        text = re.sub(r"\[IMAGE\].*?\[/IMAGE\]", "", text).strip()
 
         return text, image_urls, [], []
 
@@ -329,12 +330,11 @@ class VoiceChatApp:
             photo = ImageTk.PhotoImage(img)
             bubble = ttk.Frame(self.chat_frame, style="Neon.TFrame")
             if speaker:
-                tag_label = tk.Label(
+                tag_label = ttk.Label(
                     bubble,
                     text=speaker,
                     font=("Segoe UI", 12, "bold"),
-                    bg="black",
-                    fg=self.neon,
+                    style="Neon.TLabel",
                 )
                 self._apply_highlight(tag_label)
                 tag_label.pack(anchor="w")
@@ -382,24 +382,21 @@ class VoiceChatApp:
 
     def _append_text(self, speaker: str, text: str, role: str = "system"):
         bubble = ttk.Frame(self.chat_frame, style="Neon.TFrame")
-        tag_label = tk.Label(
+        tag_label = ttk.Label(
             bubble,
             text=speaker,
             font=("Segoe UI", 12, "bold"),
-            bg="black",
-            fg=self.neon,
+            style="Neon.TLabel",
         )
         self._apply_highlight(tag_label)
         tag_label.pack(anchor="e" if role == "user" else "w")
-        msg_label = tk.Label(
+        msg_label = ttk.Label(
             bubble,
             text=text,
             wraplength=400,
             justify=tk.RIGHT if role == "user" else tk.LEFT,
-            bg="black",
-            fg=self.neon,
-            padx=10,
-            pady=6,
+            style="Neon.TLabel",
+            padding=(10, 6),
             font=("Segoe UI", 10),
         )
         self._apply_highlight(msg_label)
