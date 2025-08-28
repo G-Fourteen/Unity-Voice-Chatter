@@ -23,7 +23,4 @@ with optional text-to-speech and speech-to-text capabilities.
    python windows_voice_chat.py
    ```
 
-To customize the window icon and header, place `unity.ico` and `unity.png`
-in the project root before running the application.
-
 The previous Discord bot implementation is preserved in the `legacy/` folder for reference.
