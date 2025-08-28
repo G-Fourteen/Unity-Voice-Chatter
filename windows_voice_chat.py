@@ -30,13 +30,34 @@ class VoiceChatApp:
         self.root.option_add("*Font", ("Segoe UI", 10))
         self.root.configure(bg="black")
 
+        # Set application icon and load logo image
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        ico_path = os.path.join(app_dir, "unity.ico")
+        png_path = os.path.join(app_dir, "unity.png")
+        if os.path.exists(ico_path):
+            try:
+                self.root.iconbitmap(ico_path)
+            except Exception:
+                pass
+        self.logo: ImageTk.PhotoImage | None = None
+        if os.path.exists(png_path):
+            try:
+                self.logo = ImageTk.PhotoImage(Image.open(png_path))
+            except Exception:
+                self.logo = None
+
         self._style = ttk.Style()
         neon = "#39FF14"
         self._style.configure("Neon.TFrame", background="black")
         self._style.configure("Neon.TCheckbutton", background="black", foreground=neon)
         self._style.configure("Neon.TButton", background="black", foreground=neon)
-        self._style.configure("Neon.TEntry", fieldbackground="black", foreground=neon, insertcolor=neon)
-        self._style.configure("Neon.TCombobox", fieldbackground="black", foreground=neon, background="black")
+        self._style.configure(
+            "Neon.TEntry", fieldbackground="black", foreground=neon, insertcolor=neon
+        )
+        self._style.configure(
+            "Neon.TCombobox", fieldbackground="black", foreground=neon, background="black"
+        )
+        self._style.configure("Neon.TLabel", background="black", foreground=neon)
         self.neon = neon
 
         self.voice_enabled = tk.BooleanVar(value=True)
@@ -54,6 +75,18 @@ class VoiceChatApp:
         self._build_ui()
 
     def _build_ui(self):
+        # Header with logo and title
+        header = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
+        header.pack(fill=tk.X)
+        if self.logo:
+            ttk.Label(header, image=self.logo, style="Neon.TLabel").pack(side=tk.LEFT)
+        ttk.Label(
+            header,
+            text="Unity Voice Chat",
+            style="Neon.TLabel",
+            font=("Segoe UI", 14, "bold"),
+        ).pack(side=tk.LEFT, padx=5)
+
         top_frame = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
         top_frame.pack(fill=tk.X)
 
@@ -156,7 +189,15 @@ class VoiceChatApp:
                     voices.append((voice.name, display))
         except Exception:
             pass
-        return voices or [("en-GB-Wavenet-F", "en-GB-Wavenet-F")]
+        if voices:
+            return voices
+        # Fallback list of common English female voices if API call fails
+        return [
+            ("en-US-Wavenet-F", "en-US-Wavenet-F"),
+            ("en-US-Neural2-F", "en-US-Neural2-F"),
+            ("en-GB-Wavenet-F", "en-GB-Wavenet-F"),
+            ("en-AU-Wavenet-F", "en-AU-Wavenet-F"),
+        ]
 
     def _language_from_voice(self) -> str:
         name = self.selected_voice.get()
