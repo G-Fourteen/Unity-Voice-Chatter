@@ -185,19 +185,32 @@ class VoiceChatApp:
         )
         clear_button.pack(side=tk.LEFT, padx=5)
 
-    def _build_message(self, text: str):
-        """Parse special tags from the AI response."""
-        if not isinstance(text, str):
-            text = "" if text is None else str(text)
-        # Extract Markdown-style image tags without altering the URL
+    def _build_message(self, content):
+        """Parse text, image links, code blocks, and memories from the API response."""
+        images = []
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "text":
+                        text_parts.append(item.get("text", ""))
+                    elif item.get("type") == "image_url":
+                        url = item.get("image_url", {}).get("url")
+                        if url:
+                            images.append(url)
+            text = "\n".join(text_parts)
+        else:
+            text = content if isinstance(content, str) else ("" if content is None else str(content))
+
         md_image_pattern = r"!\[[^\]]*\]\((https?://[^\s)]+)\)"
-        images = re.findall(md_image_pattern, text)
+        images += re.findall(md_image_pattern, text)
         text = re.sub(md_image_pattern, "", text)
 
-        # Also capture any remaining bare URLs
         url_pattern = r"(https?://[^\s]+)"
         images += re.findall(url_pattern, text)
         text = re.sub(url_pattern, "", text)
+
+        text = re.sub(r"\[image\]", "", text, flags=re.IGNORECASE)
 
         memory_pattern = r"\[memory\](.*?)\[/memory\]"
         memories = re.findall(memory_pattern, text, flags=re.DOTALL)
