@@ -24,3 +24,4 @@ class Config:
             self.system_instructions = ""
         self.api_url = "https://text.pollinations.ai/openai"
         self.models_url = "https://text.pollinations.ai/models"
+        self.default_model = "unity"
