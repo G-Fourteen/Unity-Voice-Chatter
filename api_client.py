@@ -71,12 +71,19 @@ class APIClient:
             "model": model,
             "temperature": 0.7,
             "max_tokens": 1024,
-            "stream": False
+            "stream": False,
         }
         try:
-            result = await self._request_json("POST", self.config.api_url, json=payload, timeout=aiohttp.ClientTimeout(total=30))
+            result = await self._request_json(
+                "POST",
+                self.config.api_url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30),
+            )
         except asyncio.TimeoutError:
             return "Error: Request timed out"
+        finally:
+            await self.close()
         if isinstance(result, str):
             return result
         try:
