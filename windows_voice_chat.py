@@ -56,7 +56,9 @@ class VoiceChatApp:
         self.voice_enabled = tk.BooleanVar(value=True)
         self.selected_voice = tk.StringVar()
         self.models = self.client.fetch_models()
-        self.selected_model = tk.StringVar(value=self.models[0])
+        if self.config.default_model not in self.models:
+            self.models.insert(0, self.config.default_model)
+        self.selected_model = tk.StringVar(value=self.config.default_model)
         self.messages = [
             {"role": "system", "content": self.config.system_instructions}
         ]
@@ -387,8 +389,6 @@ class VoiceChatApp:
 
     def _get_response(self, messages):
         try:
-            response = self.client.send_message(request_messages, self.selected_model.get())
-
             response = self.client.send_message(
                 messages, self.selected_model.get()
             )
