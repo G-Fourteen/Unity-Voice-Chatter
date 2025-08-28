@@ -69,14 +69,7 @@ class APIClient:
         return ["unity"]
 
     def send_message(self, messages: list, model: str):
-        filtered: List[Dict[str, str]] = []
-        for m in messages:
-            content = m.get("content")
-            if isinstance(content, str) and content.strip():
-                filtered.append({"role": m.get("role", ""), "content": content})
-            else:
-                logger.debug(f"Skipping empty message: {m}")
-        payload = {"messages": filtered, "model": model}
+        payload = {"messages": messages, "model": model}
         headers = {"Authorization": f"Bearer {self.config.pollinations_token}"}
         result = self._request_json(
             "POST", self.config.api_url, json=payload, headers=headers, timeout=30
