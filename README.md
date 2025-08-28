@@ -5,11 +5,11 @@ It reuses the API and response formatting logic from the original Unity Discord 
 with optional text-to-speech and speech-to-text capabilities.
 
 ## Features
-- Dark red and black themed Tkinter interface
+- Modern Windows 11 style interface built with `ttkbootstrap`
 - Toggleable voice output using Google Text-to-Speech
 - Speech recognition input using the default microphone
 - Sentence-by-sentence speech synthesis to avoid cut-off on long replies
-- Dropdown for selecting any language supported by Google TTS
+- Dropdown with full language names for all Google TTS languages
 - Basic chat log and memory of the current session
 
 ## Getting Started

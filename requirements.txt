@@ -4,3 +4,4 @@ playsound
 SpeechRecognition
 pyaudio
 python-dotenv
+ttkbootstrap
