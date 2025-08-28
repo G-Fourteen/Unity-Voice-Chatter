@@ -22,6 +22,35 @@ from app_config import Config
 from api_client import APIClient
 
 
+class SimpleTooltip:
+    def __init__(self, widget: tk.Widget):
+        self.widget = widget
+        self.tipwindow: tk.Toplevel | None = None
+
+    def show(self, text: str, x: int, y: int):
+        self.hide()
+        if not text:
+            return
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.geometry(f"+{x}+{y}")
+        label = tk.Label(
+            tw,
+            text=text,
+            justify=tk.LEFT,
+            background="#ffffe0",
+            relief=tk.SOLID,
+            borderwidth=1,
+            font=("Segoe UI", 8),
+        )
+        label.pack(ipadx=1)
+
+    def hide(self):
+        if self.tipwindow:
+            self.tipwindow.destroy()
+            self.tipwindow = None
+
+
 class VoiceChatApp:
     """Simple Windows voice chat application using Pollinations AI."""
 
@@ -61,6 +90,16 @@ class VoiceChatApp:
         self.messages = [
             {"role": "system", "content": self.config.system_instructions}
         ]
+
+        # Fetch available models
+        try:
+            self.models = asyncio.run(self.client.fetch_models())
+        except Exception:
+            self.models = [{"name": self.config.default_model, "description": ""}]
+        self.model_descriptions = {
+            m.get("name", ""): m.get("description", "") for m in self.models
+        }
+        self.selected_model = tk.StringVar(value=self.config.default_model)
 
         self.listening = False
         self.listen_thread: threading.Thread | None = None
@@ -114,6 +153,21 @@ class VoiceChatApp:
             "<<ComboboxSelected>>",
             lambda e: self.selected_voice.set(self.voice_map[self.voice_display.get()]),
         )
+
+        model_names = [m["name"] for m in self.models]
+        if self.selected_model.get() not in model_names and model_names:
+            self.selected_model.set(model_names[0])
+        model_menu = ttk.Combobox(
+            top_frame,
+            textvariable=self.selected_model,
+            values=model_names,
+            state="readonly",
+            width=25,
+            style="Neon.TCombobox",
+        )
+        model_menu.pack(side=tk.LEFT, padx=5)
+        model_menu.set(self.selected_model.get())
+        self._add_model_tooltips(model_menu)
 
         self.start_button = ttk.Button(
             top_frame,
@@ -174,6 +228,45 @@ class VoiceChatApp:
         )
         clear_button.pack(side=tk.LEFT, padx=5)
 
+    def _add_model_tooltips(self, combo: ttk.Combobox):
+        def on_open(event):
+            self.root.after(1, attach_tooltip)
+
+        def attach_tooltip():
+            try:
+                popdown = combo.tk.eval(f"ttk::combobox::PopdownWindow {str(combo)}")
+                popwin = self.root.nametowidget(popdown)
+            except Exception:
+                return
+            listbox = None
+            for child in popwin.winfo_children():
+                if isinstance(child, tk.Listbox):
+                    listbox = child
+                    break
+                for sub in child.winfo_children():
+                    if isinstance(sub, tk.Listbox):
+                        listbox = sub
+                        break
+                if listbox:
+                    break
+            if listbox is None:
+                return
+            tooltip = SimpleTooltip(listbox)
+
+            def on_motion(e):
+                idx = listbox.nearest(e.y)
+                value = listbox.get(idx)
+                desc = self.model_descriptions.get(value, "")
+                tooltip.show(desc, e.x_root + 20, e.y_root + 10)
+
+            def on_leave(e):
+                tooltip.hide()
+
+            listbox.bind("<Motion>", on_motion)
+            listbox.bind("<Leave>", on_leave)
+
+        combo.bind("<Button-1>", on_open)
+
     def _build_message(self, text: str):
         """Parse special tags from the AI response."""
         # Extract Markdown-style image tags without altering the URL
@@ -189,7 +282,7 @@ class VoiceChatApp:
             query = match.group(2) or ""
             params = dict(urllib.parse.parse_qsl(query, keep_blank_values=True))
             if "model" not in params or not params["model"].strip():
-                params["model"] = self.config.default_model
+                params["model"] = self.selected_model.get()
             encoded = urllib.parse.quote(prompt)
             new_query = urllib.parse.urlencode(params)
             pollinations_urls.append(
@@ -383,7 +476,7 @@ class VoiceChatApp:
         )
         try:
             response = asyncio.run(
-                self.client.send_message(request_messages, self.config.default_model)
+                self.client.send_message(request_messages, self.selected_model.get())
             )
         except Exception as e:
             self._append_text("System", f"Error contacting API: {e}")
