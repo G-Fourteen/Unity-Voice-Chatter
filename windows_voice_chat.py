@@ -167,52 +167,23 @@ class VoiceChatApp:
             self._append_text("System", f"Failed to load image: {e}")
 
     def _available_voices(self):
-        """Return available Western voices using gTTS languages."""
+        """Return available common voices using gTTS languages."""
         voices: list[tuple[str, str]] = []
         try:
             languages = tts_langs()
-            western_codes = {
-                "af",
-                "bs",
-                "ca",
-                "cs",
-                "cy",
-                "da",
-                "de",
-                "el",
-                "en",
-                "es",
-                "et",
-                "eu",
-                "fi",
-                "fr",
-                "fr-CA",
-                "gl",
-                "hr",
-                "hu",
-                "is",
-                "it",
-                "la",
-                "lt",
-                "lv",
-                "nl",
-                "no",
-                "pl",
-                "pt",
-                "pt-PT",
-                "ro",
-                "ru",
-                "sk",
-                "sq",
-                "sr",
-                "sv",
-                "tr",
-                "uk",
-                "bg",
+            common_codes = {
+                "en",  # English
+                "es",  # Spanish
+                "fr",  # French
+                "de",  # German
+                "it",  # Italian
+                "pt",  # Portuguese
+                "ru",  # Russian
             }
             for code, name in languages.items():
-                if code in western_codes:
+                if code in common_codes:
                     voices.append((code, f"{name} ({code})"))
+            voices.sort(key=lambda x: x[1])
         except Exception:
             pass
         if voices:
