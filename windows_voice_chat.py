@@ -96,6 +96,17 @@ class VoiceChatApp:
 
         self._build_ui()
 
+    def _apply_highlight(self, widget) -> None:
+        """Safely apply neon highlight to a widget if supported."""
+        try:
+            widget.configure(
+                highlightthickness=1,
+                highlightbackground=self.neon,
+                highlightcolor=self.neon,
+            )
+        except tk.TclError:
+            pass
+
     def _build_ui(self):
         # Header with title
         header = ttk.Frame(self.root, padding=5, style="Neon.TFrame")
@@ -116,11 +127,7 @@ class VoiceChatApp:
             variable=self.voice_enabled,
             style="Neon.TCheckbutton",
         )
-        voice_check.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(voice_check)
         voice_check.pack(side=tk.LEFT)
 
         voices = self._available_voices()
@@ -135,11 +142,7 @@ class VoiceChatApp:
             width=35,
             style="Neon.TCombobox",
         )
-        voice_menu.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(voice_menu)
         voice_menu.pack(side=tk.LEFT, padx=5)
         voice_menu.bind(
             "<<ComboboxSelected>>",
@@ -154,11 +157,7 @@ class VoiceChatApp:
             width=35,
             style="Neon.TCombobox",
         )
-        model_menu.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(model_menu)
         model_menu.pack(side=tk.LEFT, padx=5)
 
         self.start_button = ttk.Button(
@@ -167,11 +166,7 @@ class VoiceChatApp:
             command=self._toggle_listening,
             style="Neon.TButton",
         )
-        self.start_button.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(self.start_button)
         self.start_button.pack(side=tk.LEFT, padx=5)
 
         self.mute_button = ttk.Button(
@@ -180,11 +175,7 @@ class VoiceChatApp:
             command=self._mute_audio,
             style="Neon.TButton",
         )
-        self.mute_button.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(self.mute_button)
         self.mute_button.pack(side=tk.LEFT, padx=5)
 
         exit_button = ttk.Button(
@@ -193,11 +184,7 @@ class VoiceChatApp:
             command=self._exit_app,
             style="Neon.TButton",
         )
-        exit_button.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(exit_button)
         exit_button.pack(side=tk.LEFT, padx=5)
 
         chat_container = ttk.Frame(self.root, style="Neon.TFrame")
@@ -230,10 +217,8 @@ class VoiceChatApp:
             bg="black",
             fg=self.neon,
             insertbackground=self.neon,
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
         )
+        self._apply_highlight(self.entry)
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         self.entry.bind("<Return>", lambda event: self._send_text())
 
@@ -243,11 +228,7 @@ class VoiceChatApp:
             command=self._send_text,
             style="Neon.TButton",
         )
-        send_button.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(send_button)
         send_button.pack(side=tk.LEFT)
 
         clear_button = ttk.Button(
@@ -256,11 +237,7 @@ class VoiceChatApp:
             command=self._clear_chat,
             style="Neon.TButton",
         )
-        clear_button.configure(
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
-        )
+        self._apply_highlight(clear_button)
         clear_button.pack(side=tk.LEFT, padx=5)
 
     def _build_message(self, content):
@@ -332,10 +309,8 @@ class VoiceChatApp:
             bg="black",
             fg=self.neon,
             insertbackground=self.neon,
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
         )
+        self._apply_highlight(code_widget)
         yscroll.config(command=code_widget.yview)
         code_widget.insert("1.0", code)
         code_widget.configure(state=tk.DISABLED)
@@ -360,19 +335,15 @@ class VoiceChatApp:
                     font=("Segoe UI", 12, "bold"),
                     bg="black",
                     fg=self.neon,
-                    highlightthickness=1,
-                    highlightbackground=self.neon,
-                    highlightcolor=self.neon,
                 )
+                self._apply_highlight(tag_label)
                 tag_label.pack(anchor="w")
             label = tk.Label(
                 bubble,
                 image=photo,
                 bg="black",
-                highlightthickness=1,
-                highlightbackground=self.neon,
-                highlightcolor=self.neon,
             )
+            self._apply_highlight(label)
             label.image = photo
             label.pack(anchor="w")
             bubble.pack(anchor="w", padx=10, pady=4)
@@ -417,10 +388,8 @@ class VoiceChatApp:
             font=("Segoe UI", 12, "bold"),
             bg="black",
             fg=self.neon,
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
         )
+        self._apply_highlight(tag_label)
         tag_label.pack(anchor="e" if role == "user" else "w")
         msg_label = tk.Label(
             bubble,
@@ -432,10 +401,8 @@ class VoiceChatApp:
             padx=10,
             pady=6,
             font=("Segoe UI", 10),
-            highlightthickness=1,
-            highlightbackground=self.neon,
-            highlightcolor=self.neon,
         )
+        self._apply_highlight(msg_label)
         msg_label.pack(anchor="e" if role == "user" else "w")
         bubble.pack(anchor="e" if role == "user" else "w", padx=10, pady=4, fill=tk.X)
         self.canvas.update_idletasks()
